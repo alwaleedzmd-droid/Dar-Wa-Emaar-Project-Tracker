@@ -1,15 +1,17 @@
-import React, { useState, useEffect, Component, ReactNode } from 'react';
+
+import React, { useState, useEffect, ReactNode } from 'react';
 import { 
   LayoutDashboard, Users, FileText, Settings, LogOut, 
   Plus, ChevronRight, History as HistoryIcon, 
   FileCheck, User as UserIcon, UploadCloud,
   Menu, X, ArrowLeft, CheckCircle, XCircle, AlertCircle,
-  Image as ImageIcon, Pin, Search, Filter, FileSpreadsheet, 
+  ImageIcon, Pin, Search, Filter, FileSpreadsheet, 
   Download, Edit3, Trash2, Loader2
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { 
   Task, ProjectSummary, User, ServiceRequest, RequestStatus, 
-  ViewState, RequestHistory
+  ViewState
 } from './types';
 import { 
   INITIAL_USERS, RAW_CSV_DATA, LOGO_URL,
@@ -40,8 +42,8 @@ let db: any = null;
 
 if (IS_FIREBASE_ENABLED) {
   try {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp);
   } catch (error) {
     console.warn("Firebase initialization failed:", error);
   }
@@ -71,16 +73,19 @@ const safeStorage = {
   }
 };
 
-// Error Boundary to prevent the entire app from going blank on runtime errors
-// Fix: Use React.Component explicitly and make children optional to resolve property access and usage errors
-class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: boolean }> {
-  // Explicitly declare state and props to resolve "does not exist on type" errors in certain environments
-  state: { hasError: boolean };
-  props: { children?: ReactNode };
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
 
-  constructor(props: { children?: ReactNode }) {
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+// Error Boundary to prevent the entire app from going blank on runtime errors
+// Fix: Explicitly use React.Component to resolve TypeScript property access issues
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
     this.state = { hasError: false };
   }
 
@@ -93,7 +98,7 @@ class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: bool
   }
 
   render() {
-    // Correctly access state through this.state
+    // Fix: access state correctly within class component
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50" dir="rtl">
@@ -111,7 +116,7 @@ class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: bool
         </div>
       );
     }
-    // Correctly access props through this.props
+    // Fix: access props correctly within class component
     return this.props.children;
   }
 }
@@ -360,6 +365,39 @@ const AppContent: React.FC = () => {
     const updatedProjects = projects.map(p => p.name === selectedProject.name ? updatedProj : p);
     updateProjectData(updatedProjects);
     setSelectedProject(updatedProj);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = [['اسم العميل', 'رقم الهوية', 'رقم القطعة', 'رقم الصك', 'المشروع', 'رقم الجوال', 'البنك', 'قيمة العقار']];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    ws['!cols'] = [{wch: 25}, {wch: 15}, {wch: 10}, {wch: 15}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}];
+    XLSX.utils.book_append_sheet(wb, ws, "نموذج الإفراغات");
+    XLSX.writeFile(wb, "نموذج_رفع_الإفراغات.xlsx");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws);
+        const mappedData: Partial<ServiceRequest>[] = data.map((row: any) => ({
+            clientName: row['اسم العميل'],
+            idNumber: row['رقم الهوية'],
+            plotNumber: row['رقم القطعة'],
+            deedNumber: row['رقم الصك'],
+            projectName: row['المشروع'],
+            mobileNumber: row['رقم الجوال'],
+            bank: row['البنك'],
+            propertyValue: row['قيمة العقار'],
+        })).filter((item: Partial<ServiceRequest>) => item.clientName);
+        setBulkPreviewData(mappedData);
+    };
+    reader.readAsBinaryString(file);
   };
 
   const handleCreateRequest = () => {
@@ -654,7 +692,7 @@ const AppContent: React.FC = () => {
                 {view === 'DASHBOARD' && renderDashboard()}
                 {view === 'PROJECT_DETAIL' && renderProjectDetail()}
                 {view === 'USERS' && <div className="flex flex-col items-center justify-center h-full text-gray-400"><Users className="w-16 h-16 mb-4 opacity-20" /><p>إدارة المستخدمين</p></div>}
-                {/* Add other views as needed, currently limited to requested pages */}
+                {/* Requests and Service views would be implemented here if needed based on the previous app version */}
             </main>
         </div>
     </div>
