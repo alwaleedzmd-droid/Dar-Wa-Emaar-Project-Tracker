@@ -155,7 +155,7 @@ const App: React.FC = () => {
   // Firebase Sync
   useEffect(() => {
     if (currentUser && IS_FIREBASE_ENABLED && db) {
-        const q = query(collection(db, "requests"), orderBy("submittedAt", "desc"));
+        const q = query(collection(db, "requests"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const reqs = snapshot.docs.map(doc => ({
                 id: doc.id,
