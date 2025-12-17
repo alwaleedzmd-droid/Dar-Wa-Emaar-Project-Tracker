@@ -35,7 +35,7 @@ const firebaseConfig = {
   appId: "1:123456789:web:abcdef"
 };
 
-const IS_FIREBASE_ENABLED = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
+const IS_FIREBASE_ENABLED = false;
 let app;
 let db: any;
 
