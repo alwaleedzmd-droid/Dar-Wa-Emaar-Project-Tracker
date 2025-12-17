@@ -1,11 +1,10 @@
-
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode, Component } from 'react';
 import { 
   LayoutDashboard, Users, FileText, Settings, LogOut, 
   Plus, ChevronRight, History as HistoryIcon, 
   FileCheck, User as UserIcon, UploadCloud,
   Menu, X, ArrowLeft, CheckCircle, XCircle, AlertCircle,
-  ImageIcon, Pin, Search, Filter, FileSpreadsheet, 
+  Image as ImageIcon, Pin, Search, Filter, FileSpreadsheet, 
   Download, Edit3, Trash2, Loader2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -15,7 +14,7 @@ import {
 } from './types';
 import { 
   INITIAL_USERS, RAW_CSV_DATA, LOGO_URL,
-  TECHNICAL_SERVICE_TYPES, GOVERNMENT_AUTHORITIES, LOCATIONS_ORDER
+  LOCATIONS_ORDER
 } from './constants';
 import ProjectCard from './components/ProjectCard';
 import TaskCard from './components/TaskCard';
@@ -82,14 +81,13 @@ interface ErrorBoundaryState {
 }
 
 // Error Boundary to prevent the entire app from going blank on runtime errors
-// Fix: Explicitly use React.Component to resolve TypeScript property access issues
+// Fix: Use React.Component explicitly and remove redundant constructor to ensure this.props is correctly inferred by TypeScript
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
+  public state: ErrorBoundaryState = {
+    hasError: false
+  };
 
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(_: any): ErrorBoundaryState {
     return { hasError: true };
   }
 
@@ -98,7 +96,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   render() {
-    // Fix: access state correctly within class component
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50" dir="rtl">
@@ -116,7 +113,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         </div>
       );
     }
-    // Fix: access props correctly within class component
     return this.props.children;
   }
 }
@@ -486,37 +482,6 @@ const AppContent: React.FC = () => {
     setSelectedRequest(null);
   };
 
-  // --- Render Sections ---
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white" dir="rtl">
-        <Loader2 className="w-12 h-12 text-[#E95D22] animate-spin mb-4" />
-        <p className="text-gray-500 font-medium">جاري تهيئة النظام...</p>
-      </div>
-    );
-  }
-
-  if (view === 'LOGIN') {
-    return (
-      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
-              <div className="bg-[#1B2B48] p-8 text-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[#E95D22]/10 blur-3xl rounded-full transform -translate-y-1/2 scale-150"></div>
-                  <img src={LOGO_URL} alt="Logo" className="h-24 mx-auto bg-white rounded-2xl p-2 mb-4 shadow-lg relative z-10" />
-                  <h2 className="text-2xl font-bold text-white relative z-10">تسجيل الدخول</h2>
-                  <p className="text-blue-200 text-sm mt-2 relative z-10">نظام متابعة المشاريع - دار وإعمار</p>
-              </div>
-              <form onSubmit={handleLogin} className="p-8 space-y-6">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label><input type="email" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@dar.sa" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-2">كلمة المرور</label><input type="password" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
-                  <button type="submit" className="w-full bg-[#E95D22] text-white py-3.5 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/30 active:scale-[0.98]">تسجيل الدخول</button>
-              </form>
-          </div>
-      </div>
-    );
-  }
-
   const renderDashboard = () => {
     const filteredProjects = projects.filter(p => {
        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.location.toLowerCase().includes(searchQuery.toLowerCase());
@@ -650,6 +615,35 @@ const AppContent: React.FC = () => {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white" dir="rtl">
+        <Loader2 className="w-12 h-12 text-[#E95D22] animate-spin mb-4" />
+        <p className="text-gray-500 font-medium">جاري تهيئة النظام...</p>
+      </div>
+    );
+  }
+
+  if (view === 'LOGIN') {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+              <div className="bg-[#1B2B48] p-8 text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[#E95D22]/10 blur-3xl rounded-full transform -translate-y-1/2 scale-150"></div>
+                  <img src={LOGO_URL} alt="Logo" className="h-24 mx-auto bg-white rounded-2xl p-2 mb-4 shadow-lg relative z-10" />
+                  <h2 className="text-2xl font-bold text-white relative z-10">تسجيل الدخول</h2>
+                  <p className="text-blue-200 text-sm mt-2 relative z-10">نظام متابعة المشاريع - دار وإعمار</p>
+              </div>
+              <form onSubmit={handleLogin} className="p-8 space-y-6">
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label><input type="email" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@dar.sa" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">كلمة المرور</label><input type="password" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
+                  <button type="submit" className="w-full bg-[#E95D22] text-white py-3.5 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/30 active:scale-[0.98]">تسجيل الدخول</button>
+              </form>
+          </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden" dir="rtl">
         {/* Sidebar */}
@@ -692,7 +686,6 @@ const AppContent: React.FC = () => {
                 {view === 'DASHBOARD' && renderDashboard()}
                 {view === 'PROJECT_DETAIL' && renderProjectDetail()}
                 {view === 'USERS' && <div className="flex flex-col items-center justify-center h-full text-gray-400"><Users className="w-16 h-16 mb-4 opacity-20" /><p>إدارة المستخدمين</p></div>}
-                {/* Requests and Service views would be implemented here if needed based on the previous app version */}
             </main>
         </div>
     </div>
