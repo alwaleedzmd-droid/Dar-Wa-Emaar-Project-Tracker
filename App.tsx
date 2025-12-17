@@ -246,25 +246,7 @@ const handleCreateRequest = async () => {
     setIsRequestModalOpen(false);
     setNewRequestData({});
   };
-    if (!currentUser) return;
-    
-    if (isBulkMode && bulkPreviewData.length > 0) {
-        // Handle Bulk Submit
-        const newRequests = bulkPreviewData.map(data => createServiceRequestObject(data));
-        setServiceRequests(prev => [...newRequests, ...prev]);
-        setIsBulkMode(false);
-        setBulkPreviewData([]);
-    } else {
-        // Handle Single Submit
-        const req = createServiceRequestObject(newRequestData);
-        setServiceRequests(prev => [req, ...prev]);
-    }
-    
-    setIsRequestModalOpen(false);
-    setNewRequestData({});
-  };
-
-  const handleDownloadTemplate = () => {
+     const handleDownloadTemplate = () => {
     // Check if XLSX is available
     const XLSX = (window as any).XLSX;
     if (!XLSX) return;
