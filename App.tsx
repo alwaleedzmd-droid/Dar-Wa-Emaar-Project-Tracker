@@ -54,6 +54,25 @@ const STORAGE_KEYS = {
     TASKS: 'dar_wa_emaar_tasks_v1'
 };
 
+// Safe storage utilities to prevent crashes when localStorage is blocked
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn('Storage access denied:', e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('Could not save to storage:', e);
+    }
+  }
+};
+
 const App: React.FC = () => {
   // --- State ---
   const [users] = useState<User[]>(INITIAL_USERS);
@@ -100,82 +119,87 @@ const App: React.FC = () => {
   
   // Load Initial Data or Persistence
   useEffect(() => {
-    const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-    const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    const savedTasks = safeStorage.getItem(STORAGE_KEYS.TASKS);
+    const savedProjects = safeStorage.getItem(STORAGE_KEYS.PROJECTS);
 
     if (savedTasks && savedProjects) {
-        setTasks(JSON.parse(savedTasks));
-        setProjects(JSON.parse(savedProjects));
-    } else {
-        // Parse CSV if no storage exists
-        const lines = RAW_CSV_DATA.trim().split('\n');
-        const parsedTasks: Task[] = [];
-        
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i];
-          const row: string[] = [];
-          let current = '';
-          let inQuote = false;
-          for (let j = 0; j < line.length; j++) {
-            const char = line[j];
-            if (char === '"') inQuote = !inQuote;
-            else if (char === ',' && !inQuote) {
-                row.push(current.trim());
-                current = '';
-            } else current += char;
-          }
-          row.push(current.trim());
-          const cleanRow = row.map(c => c.replace(/^"|"$/g, '').trim());
-
-          if (cleanRow.length >= 8) {
-            parsedTasks.push({
-              id: `task-${i}-${Date.now()}`,
-              project: cleanRow[0],
-              description: cleanRow[1],
-              reviewer: cleanRow[2],
-              requester: cleanRow[3],
-              notes: cleanRow[4],
-              location: cleanRow[5],
-              status: cleanRow[6],
-              date: cleanRow[7]
-            });
-          }
+        try {
+          setTasks(JSON.parse(savedTasks));
+          setProjects(JSON.parse(savedProjects));
+          return; // Exit early if we successfully loaded from storage
+        } catch (e) {
+          console.error('Error parsing stored data:', e);
         }
-        setTasks(parsedTasks);
-
-        const grouped: Record<string, Task[]> = {};
-        parsedTasks.forEach(t => {
-          if (!grouped[t.project]) grouped[t.project] = [];
-          grouped[t.project].push(t);
-        });
-
-        const projectSummaries: ProjectSummary[] = Object.keys(grouped).map(name => {
-          const pTasks = grouped[name];
-          const completed = pTasks.filter(t => t.status === 'منجز').length;
-          return {
-            name,
-            location: pTasks[0].location,
-            totalTasks: pTasks.length,
-            completedTasks: completed,
-            progress: pTasks.length ? (completed / pTasks.length) * 100 : 0,
-            tasks: pTasks,
-            isPinned: false
-          };
-        });
-        setProjects(projectSummaries);
     }
+    
+    // Parse CSV if no storage exists OR storage failed
+    const lines = RAW_CSV_DATA.trim().split('\n');
+    const parsedTasks: Task[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      const row: string[] = [];
+      let current = '';
+      let inQuote = false;
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        if (char === '"') inQuote = !inQuote;
+        else if (char === ',' && !inQuote) {
+            row.push(current.trim());
+            current = '';
+        } else current += char;
+      }
+      row.push(current.trim());
+      const cleanRow = row.map(c => c.replace(/^"|"$/g, '').trim());
+
+      if (cleanRow.length >= 8) {
+        parsedTasks.push({
+          id: `task-${i}-${Date.now()}`,
+          project: cleanRow[0],
+          description: cleanRow[1],
+          reviewer: cleanRow[2],
+          requester: cleanRow[3],
+          notes: cleanRow[4],
+          location: cleanRow[5],
+          status: cleanRow[6],
+          date: cleanRow[7]
+        });
+      }
+    }
+    setTasks(parsedTasks);
+
+    const grouped: Record<string, Task[]> = {};
+    parsedTasks.forEach(t => {
+      if (!grouped[t.project]) grouped[t.project] = [];
+      grouped[t.project].push(t);
+    });
+
+    const projectSummaries: ProjectSummary[] = Object.keys(grouped).map(name => {
+      const pTasks = grouped[name];
+      const completed = pTasks.filter(t => t.status === 'منجز').length;
+      return {
+        name,
+        location: pTasks[0].location,
+        totalTasks: pTasks.length,
+        completedTasks: completed,
+        progress: pTasks.length ? (completed / pTasks.length) * 100 : 0,
+        tasks: pTasks,
+        isPinned: false
+      };
+    });
+    setProjects(projectSummaries);
   }, []);
 
   // Sync to Storage
   useEffect(() => {
     if (tasks.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+        safeStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
     }
   }, [tasks]);
 
   useEffect(() => {
     if (projects.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+        safeStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
     }
   }, [projects]);
 
