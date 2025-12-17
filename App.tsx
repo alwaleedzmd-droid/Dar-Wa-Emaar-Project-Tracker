@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ReactNode } from 'react';
 import { 
   LayoutDashboard, Users, FileText, Settings, LogOut, 
   Plus, ChevronRight, History as HistoryIcon, 
   FileCheck, User as UserIcon, UploadCloud,
   Menu, X, ArrowLeft, CheckCircle, XCircle, AlertCircle,
-  Image as ImageIcon,
-  Pin, Search, Filter, FileSpreadsheet, Download,
-  Edit3, Trash2
+  Image as ImageIcon, Pin, Search, Filter, FileSpreadsheet, 
+  Download, Edit3, Trash2, Loader2
 } from 'lucide-react';
 import { 
   Task, ProjectSummary, User, ServiceRequest, RequestStatus, 
@@ -20,7 +19,7 @@ import ProjectCard from './components/ProjectCard';
 import TaskCard from './components/TaskCard';
 import Modal from './components/Modal';
 
-// Firebase Imports (Keep existing config structure)
+// Firebase Imports (Defensive initialization)
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, collection, onSnapshot, 
@@ -37,12 +36,11 @@ const firebaseConfig = {
 };
 
 const IS_FIREBASE_ENABLED = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
-let app;
-let db: any;
+let db: any = null;
 
 if (IS_FIREBASE_ENABLED) {
   try {
-    app = initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
   } catch (error) {
     console.warn("Firebase initialization failed:", error);
@@ -54,13 +52,13 @@ const STORAGE_KEYS = {
     TASKS: 'dar_wa_emaar_tasks_v1'
 };
 
-// Safe storage utilities to prevent crashes when localStorage is blocked
+// Safe storage utility with defensive try-catch to prevent crashes in restricted environments
 const safeStorage = {
   getItem: (key: string): string | null => {
     try {
       return localStorage.getItem(key);
     } catch (e) {
-      console.warn('Storage access denied:', e);
+      console.warn('Storage access blocked or failed:', e);
       return null;
     }
   },
@@ -73,11 +71,57 @@ const safeStorage = {
   }
 };
 
-const App: React.FC = () => {
+// Error Boundary to prevent the entire app from going blank on runtime errors
+// Fix: Use React.Component explicitly and make children optional to resolve property access and usage errors
+class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: boolean }> {
+  // Explicitly declare state and props to resolve "does not exist on type" errors in certain environments
+  state: { hasError: boolean };
+  props: { children?: ReactNode };
+
+  constructor(props: { children?: ReactNode }) {
+    super(props);
+    this.props = props;
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    // Correctly access state through this.state
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50" dir="rtl">
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md">
+            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">حدث خطأ غير متوقع</h1>
+            <p className="text-gray-600 mb-6">نعتذر عن الإزعاج. يرجى محاولة تحديث الصفحة أو الاتصال بالدعم الفني.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-[#E95D22] text-white py-3 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg"
+            >
+              تحديث الصفحة
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // Correctly access props through this.props
+    return this.props.children;
+  }
+}
+
+const AppContent: React.FC = () => {
   // --- State ---
   const [users] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewState>('LOGIN');
+  const [isLoading, setIsLoading] = useState(true);
   
   // Data State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -117,96 +161,107 @@ const App: React.FC = () => {
 
   // --- Effects ---
   
-  // Load Initial Data or Persistence
+  // Initialize App Data
   useEffect(() => {
-    const savedTasks = safeStorage.getItem(STORAGE_KEYS.TASKS);
-    const savedProjects = safeStorage.getItem(STORAGE_KEYS.PROJECTS);
+    const initializeData = async () => {
+      setIsLoading(true);
+      try {
+        const savedTasks = safeStorage.getItem(STORAGE_KEYS.TASKS);
+        const savedProjects = safeStorage.getItem(STORAGE_KEYS.PROJECTS);
 
-    if (savedTasks && savedProjects) {
-        try {
-          setTasks(JSON.parse(savedTasks));
-          setProjects(JSON.parse(savedProjects));
-          return; // Exit early if we successfully loaded from storage
-        } catch (e) {
-          console.error('Error parsing stored data:', e);
+        if (savedTasks && savedProjects) {
+            try {
+              setTasks(JSON.parse(savedTasks));
+              setProjects(JSON.parse(savedProjects));
+              setIsLoading(false);
+              return;
+            } catch (e) {
+              console.error('Error parsing stored data:', e);
+            }
         }
-    }
-    
-    // Parse CSV if no storage exists OR storage failed
-    const lines = RAW_CSV_DATA.trim().split('\n');
-    const parsedTasks: Task[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      const row: string[] = [];
-      let current = '';
-      let inQuote = false;
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        if (char === '"') inQuote = !inQuote;
-        else if (char === ',' && !inQuote) {
-            row.push(current.trim());
-            current = '';
-        } else current += char;
-      }
-      row.push(current.trim());
-      const cleanRow = row.map(c => c.replace(/^"|"$/g, '').trim());
+        
+        // Fallback: Parse CSV
+        const lines = RAW_CSV_DATA.trim().split('\n');
+        const parsedTasks: Task[] = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          const row: string[] = [];
+          let current = '';
+          let inQuote = false;
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') inQuote = !inQuote;
+            else if (char === ',' && !inQuote) {
+                row.push(current.trim());
+                current = '';
+            } else current += char;
+          }
+          row.push(current.trim());
+          const cleanRow = row.map(c => c.replace(/^"|"$/g, '').trim());
 
-      if (cleanRow.length >= 8) {
-        parsedTasks.push({
-          id: `task-${i}-${Date.now()}`,
-          project: cleanRow[0],
-          description: cleanRow[1],
-          reviewer: cleanRow[2],
-          requester: cleanRow[3],
-          notes: cleanRow[4],
-          location: cleanRow[5],
-          status: cleanRow[6],
-          date: cleanRow[7]
+          if (cleanRow.length >= 8) {
+            parsedTasks.push({
+              id: `task-${i}-${Date.now()}`,
+              project: cleanRow[0],
+              description: cleanRow[1],
+              reviewer: cleanRow[2],
+              requester: cleanRow[3],
+              notes: cleanRow[4],
+              location: cleanRow[5],
+              status: cleanRow[6],
+              date: cleanRow[7]
+            });
+          }
+        }
+        setTasks(parsedTasks);
+
+        const grouped: Record<string, Task[]> = {};
+        parsedTasks.forEach(t => {
+          if (!grouped[t.project]) grouped[t.project] = [];
+          grouped[t.project].push(t);
         });
+
+        const projectSummaries: ProjectSummary[] = Object.keys(grouped).map(name => {
+          const pTasks = grouped[name];
+          const completed = pTasks.filter(t => t.status === 'منجز').length;
+          return {
+            name,
+            location: pTasks[0].location,
+            totalTasks: pTasks.length,
+            completedTasks: completed,
+            progress: pTasks.length ? (completed / pTasks.length) * 100 : 0,
+            tasks: pTasks,
+            isPinned: false
+          };
+        });
+        setProjects(projectSummaries);
+      } catch (error) {
+        console.error("Initialization failed:", error);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setTasks(parsedTasks);
+    };
 
-    const grouped: Record<string, Task[]> = {};
-    parsedTasks.forEach(t => {
-      if (!grouped[t.project]) grouped[t.project] = [];
-      grouped[t.project].push(t);
-    });
-
-    const projectSummaries: ProjectSummary[] = Object.keys(grouped).map(name => {
-      const pTasks = grouped[name];
-      const completed = pTasks.filter(t => t.status === 'منجز').length;
-      return {
-        name,
-        location: pTasks[0].location,
-        totalTasks: pTasks.length,
-        completedTasks: completed,
-        progress: pTasks.length ? (completed / pTasks.length) * 100 : 0,
-        tasks: pTasks,
-        isPinned: false
-      };
-    });
-    setProjects(projectSummaries);
+    initializeData();
   }, []);
 
   // Sync to Storage
   useEffect(() => {
-    if (tasks.length > 0) {
+    if (!isLoading && tasks.length > 0) {
         safeStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
     }
-  }, [tasks]);
+  }, [tasks, isLoading]);
 
   useEffect(() => {
-    if (projects.length > 0) {
+    if (!isLoading && projects.length > 0) {
         safeStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
     }
-  }, [projects]);
+  }, [projects, isLoading]);
 
   // Sync Project updates to tasks list
   const updateProjectData = (updatedProjects: ProjectSummary[]) => {
       setProjects(updatedProjects);
-      // Flatten all tasks from all projects back to the tasks state
       const allTasks = updatedProjects.flatMap(p => p.tasks);
       setTasks(allTasks);
   };
@@ -248,54 +303,15 @@ const App: React.FC = () => {
     setPassword('');
   };
 
-  const createServiceRequestObject = (data: Partial<ServiceRequest>): ServiceRequest => {
-    if (!currentUser) throw new Error("No user logged in");
-    const isConveyance = currentUser.role === 'CONVEYANCE';
-    return {
-        id: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
-        name: isConveyance ? `إفراغ - ${data.clientName || 'بدون اسم'}` : data.serviceSubType || 'خدمة فنية',
-        type: isConveyance ? 'conveyance' : 'technical',
-        details: data.details || '',
-        submittedBy: currentUser.name,
-        role: currentUser.role,
-        status: 'new',
-        date: new Date().toISOString().split('T')[0],
-        history: [{
-            action: 'تم إنشاء الطلب',
-            by: currentUser.name,
-            role: currentUser.role,
-            timestamp: new Date().toISOString()
-        }],
-        ...data
-    } as ServiceRequest;
-  };
-
-  const handleCreateRequest = () => {
-    if (!currentUser) return;
-    if (isBulkMode && bulkPreviewData.length > 0) {
-        const newRequests = bulkPreviewData.map(data => createServiceRequestObject(data));
-        setServiceRequests(prev => [...newRequests, ...prev]);
-        setIsBulkMode(false);
-        setBulkPreviewData([]);
-    } else {
-        const req = createServiceRequestObject(newRequestData);
-        setServiceRequests(prev => [req, ...prev]);
-    }
-    setIsRequestModalOpen(false);
-    setNewRequestData({});
-  };
-
   const handleSaveTask = () => {
     if (!selectedProject) return;
 
     let updatedTasks: Task[];
     if (editingTask) {
-        // Edit existing
         updatedTasks = selectedProject.tasks.map(t => 
             t.id === editingTask.id ? { ...t, ...newTaskData } : t
         );
     } else {
-        // Add new
         const newTask: Task = {
             id: `task-manual-${Date.now()}`,
             project: selectedProject.name,
@@ -344,6 +360,41 @@ const App: React.FC = () => {
     const updatedProjects = projects.map(p => p.name === selectedProject.name ? updatedProj : p);
     updateProjectData(updatedProjects);
     setSelectedProject(updatedProj);
+  };
+
+  const handleCreateRequest = () => {
+    if (!currentUser) return;
+    const isConveyance = currentUser.role === 'CONVEYANCE';
+    
+    const createReq = (data: Partial<ServiceRequest>): ServiceRequest => ({
+        id: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
+        name: isConveyance ? `إفراغ - ${data.clientName || 'بدون اسم'}` : data.serviceSubType || 'خدمة فنية',
+        type: isConveyance ? 'conveyance' : 'technical',
+        details: data.details || '',
+        submittedBy: currentUser.name,
+        role: currentUser.role,
+        status: 'new',
+        date: new Date().toISOString().split('T')[0],
+        history: [{
+            action: 'تم إنشاء الطلب',
+            by: currentUser.name,
+            role: currentUser.role,
+            timestamp: new Date().toISOString()
+        }],
+        ...data
+    } as ServiceRequest);
+
+    if (isBulkMode && bulkPreviewData.length > 0) {
+        const newRequests = bulkPreviewData.map(data => createReq(data));
+        setServiceRequests(prev => [...newRequests, ...prev]);
+        setIsBulkMode(false);
+        setBulkPreviewData([]);
+    } else {
+        const req = createReq(newRequestData);
+        setServiceRequests(prev => [req, ...prev]);
+    }
+    setIsRequestModalOpen(false);
+    setNewRequestData({});
   };
 
   const handleUpdateStatus = (reqId: string, newStatus: RequestStatus, note?: string) => {
@@ -397,153 +448,88 @@ const App: React.FC = () => {
     setSelectedRequest(null);
   };
 
-  const handleSaveProjectImage = () => {
-    if (selectedProject) {
-        const updatedProjects = projects.map(p => p.name === selectedProject.name ? { ...p, imageUrl: editProjectImageUrl } : p);
-        updateProjectData(updatedProjects);
-        setSelectedProject({ ...selectedProject, imageUrl: editProjectImageUrl });
-        setIsEditProjectModalOpen(false);
-    }
-  };
+  // --- Render Sections ---
 
-  const handleTogglePin = (project: ProjectSummary) => {
-    const updatedProjects = projects.map(p => p.name === project.name ? { ...p, isPinned: !p.isPinned } : p);
-    updateProjectData(updatedProjects);
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setEditProjectImageUrl(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleDownloadTemplate = () => {
-    const XLSX = (window as any).XLSX;
-    if (!XLSX) return;
-    const headers = [['اسم العميل', 'رقم الهوية', 'رقم القطعة', 'رقم الصك', 'المشروع', 'رقم الجوال', 'البنك', 'قيمة العقار']];
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(headers);
-    ws['!cols'] = [{wch: 25}, {wch: 15}, {wch: 10}, {wch: 15}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}];
-    XLSX.utils.book_append_sheet(wb, ws, "نموذج الإفراغات");
-    XLSX.writeFile(wb, "نموذج_رفع_الإفراغات.xlsx");
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        const bstr = evt.target?.result;
-        const XLSX = (window as any).XLSX;
-        if (!XLSX) return;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws);
-        const mappedData: Partial<ServiceRequest>[] = data.map((row: any) => ({
-            clientName: row['اسم العميل'],
-            idNumber: row['رقم الهوية'],
-            plotNumber: row['رقم القطعة'],
-            deedNumber: row['رقم الصك'],
-            projectName: row['المشروع'],
-            mobileNumber: row['رقم الجوال'],
-            bank: row['البنك'],
-            propertyValue: row['قيمة العقار'],
-        })).filter((item: Partial<ServiceRequest>) => item.clientName);
-        setBulkPreviewData(mappedData);
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  // --- Render Functions ---
-
-  const renderSidebar = () => {
-    if (!currentUser || view === 'LOGIN') return null;
-    const menuItems = [
-      { id: 'DASHBOARD', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER'] },
-      { id: 'REQUESTS', label: 'الطلبات', icon: FileText, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER', 'FINANCE'] },
-      { id: 'SERVICE_ONLY', label: 'طلب خدمة', icon: Plus, roles: ['TECHNICAL', 'CONVEYANCE'] },
-      { id: 'USERS', label: 'المستخدمين', icon: Users, roles: ['ADMIN'] },
-    ];
+  if (isLoading) {
     return (
-      <>
-        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
-        <div className={`fixed inset-y-0 right-0 z-50 w-64 bg-[#1B2B48] text-white transform transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 md:static md:flex flex-col h-screen`}>
-          <div className="p-6 flex flex-col items-center border-b border-gray-700 relative">
-             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden absolute top-4 left-4 text-gray-400 hover:text-white"><X size={20} /></button>
-             <img src={LOGO_URL} alt="Logo" className="h-16 mb-4 bg-white rounded-lg p-1" />
-             <h2 className="font-bold text-lg">دار وإعمار</h2>
-             <p className="text-xs text-gray-400 mt-1">{currentUser.name}</p>
-          </div>
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-             {menuItems.filter(item => item.roles.includes(currentUser.role)).map(item => (
-               <button key={item.id} onClick={() => { setView(item.id as ViewState); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${view === item.id ? 'bg-[#E95D22] text-white shadow-lg shadow-[#E95D22]/30 font-medium' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}>
-                 <item.icon className="w-5 h-5" />
-                 <span>{item.label}</span>
-               </button>
-             ))}
-          </nav>
-          <div className="p-4 border-t border-gray-700">
-             <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"><LogOut className="w-5 h-5" /><span>تسجيل خروج</span></button>
-          </div>
-        </div>
-      </>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white" dir="rtl">
+        <Loader2 className="w-12 h-12 text-[#E95D22] animate-spin mb-4" />
+        <p className="text-gray-500 font-medium">جاري تهيئة النظام...</p>
+      </div>
     );
-  };
+  }
+
+  if (view === 'LOGIN') {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+              <div className="bg-[#1B2B48] p-8 text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[#E95D22]/10 blur-3xl rounded-full transform -translate-y-1/2 scale-150"></div>
+                  <img src={LOGO_URL} alt="Logo" className="h-24 mx-auto bg-white rounded-2xl p-2 mb-4 shadow-lg relative z-10" />
+                  <h2 className="text-2xl font-bold text-white relative z-10">تسجيل الدخول</h2>
+                  <p className="text-blue-200 text-sm mt-2 relative z-10">نظام متابعة المشاريع - دار وإعمار</p>
+              </div>
+              <form onSubmit={handleLogin} className="p-8 space-y-6">
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label><input type="email" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@dar.sa" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">كلمة المرور</label><input type="password" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
+                  <button type="submit" className="w-full bg-[#E95D22] text-white py-3.5 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/30 active:scale-[0.98]">تسجيل الدخول</button>
+              </form>
+          </div>
+      </div>
+    );
+  }
 
   const renderDashboard = () => {
-     const filteredProjects = projects.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.location.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesLocation = locationFilter === 'All' || p.location === locationFilter;
-        return matchesSearch && matchesLocation;
-     });
-     const pinnedProjects = filteredProjects.filter(p => p.isPinned);
-     const otherProjects = filteredProjects.filter(p => !p.isPinned);
+    const filteredProjects = projects.filter(p => {
+       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.location.toLowerCase().includes(searchQuery.toLowerCase());
+       const matchesLocation = locationFilter === 'All' || p.location === locationFilter;
+       return matchesSearch && matchesLocation;
+    });
+    const pinnedProjects = filteredProjects.filter(p => p.isPinned);
+    const otherProjects = filteredProjects.filter(p => !p.isPinned);
 
-     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                <div>
-                    <h2 className="text-2xl font-bold text-[#1B2B48]">لوحة التحكم</h2>
-                    <p className="text-gray-500 text-sm mt-1">نظرة عامة على جميع المشاريع والمهام</p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                    <div className="relative group">
-                        <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-[#E95D22] transition-colors w-4 h-4" />
-                        <input type="text" placeholder="بحث باسم المشروع أو الموقع..." className="w-full sm:w-64 pl-4 pr-10 py-2.5 bg-white rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none text-sm transition-all" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                    </div>
-                    <div className="relative">
-                        <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-                        <select className="w-full sm:w-48 pl-4 pr-10 py-2.5 bg-white rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none text-sm appearance-none cursor-pointer transition-all" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
-                            <option value="All">جميع المواقع</option>
-                            {LOCATIONS_ORDER.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                        </select>
-                    </div>
-                </div>
-            </div>
-            {pinnedProjects.length > 0 && (
-                <div className="mb-8">
-                    <h3 className="text-lg font-bold text-[#E95D22] mb-4 flex items-center gap-2"><Pin className="w-5 h-5 fill-current" />المشاريع المثبتة</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {pinnedProjects.map((project, idx) => <ProjectCard key={`pinned-${project.name}`} project={project} onClick={(p) => { setSelectedProject(p); setView('PROJECT_DETAIL'); setTaskFilter('All'); }} onTogglePin={handleTogglePin} />)}
-                    </div>
-                </div>
-            )}
-            {otherProjects.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {otherProjects.map((project, idx) => <ProjectCard key={idx} project={project} onClick={(p) => { setSelectedProject(p); setView('PROJECT_DETAIL'); setTaskFilter('All'); }} onTogglePin={handleTogglePin} />)}
-                </div>
-            ) : filteredProjects.length === 0 && projects.length > 0 && (
-                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
-                    <Search className="w-12 h-12 text-gray-300 mb-3" />
-                    <p className="text-gray-500 font-medium">لا توجد مشاريع تطابق بحثك</p>
-                    <button onClick={() => {setSearchQuery(''); setLocationFilter('All');}} className="mt-3 text-[#E95D22] text-sm hover:underline">مسح فلاتر البحث</button>
-                </div>
-            )}
-        </div>
-     );
+    return (
+       <div className="space-y-6 animate-in fade-in duration-500">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+               <div>
+                   <h2 className="text-2xl font-bold text-[#1B2B48]">لوحة التحكم</h2>
+                   <p className="text-gray-500 text-sm mt-1">نظرة عامة على جميع المشاريع والمهام</p>
+               </div>
+               <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                   <div className="relative group">
+                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-[#E95D22] transition-colors w-4 h-4" />
+                       <input type="text" placeholder="بحث باسم المشروع أو الموقع..." className="w-full sm:w-64 pl-4 pr-10 py-2.5 bg-white rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none text-sm transition-all" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                   </div>
+                   <div className="relative">
+                       <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                       <select className="w-full sm:w-48 pl-4 pr-10 py-2.5 bg-white rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none text-sm appearance-none cursor-pointer transition-all" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+                           <option value="All">جميع المواقع</option>
+                           {LOCATIONS_ORDER.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                       </select>
+                   </div>
+               </div>
+           </div>
+           {pinnedProjects.length > 0 && (
+               <div className="mb-8">
+                   <h3 className="text-lg font-bold text-[#E95D22] mb-4 flex items-center gap-2"><Pin className="w-5 h-5 fill-current" />المشاريع المثبتة</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       {pinnedProjects.map((project, idx) => <ProjectCard key={`pinned-${project.name}`} project={project} onClick={(p) => { setSelectedProject(p); setView('PROJECT_DETAIL'); setTaskFilter('All'); }} onTogglePin={(p) => { const up = projects.map(x => x.name === p.name ? {...x, isPinned: !x.isPinned} : x); updateProjectData(up); }} />)}
+                   </div>
+               </div>
+           )}
+           {otherProjects.length > 0 ? (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {otherProjects.map((project, idx) => <ProjectCard key={idx} project={project} onClick={(p) => { setSelectedProject(p); setView('PROJECT_DETAIL'); setTaskFilter('All'); }} onTogglePin={(p) => { const up = projects.map(x => x.name === p.name ? {...x, isPinned: !x.isPinned} : x); updateProjectData(up); }} />)}
+               </div>
+           ) : filteredProjects.length === 0 && projects.length > 0 && (
+               <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
+                   <Search className="w-12 h-12 text-gray-300 mb-3" />
+                   <p className="text-gray-500 font-medium">لا توجد مشاريع تطابق بحثك</p>
+                   <button onClick={() => {setSearchQuery(''); setLocationFilter('All');}} className="mt-3 text-[#E95D22] text-sm hover:underline">مسح فلاتر البحث</button>
+               </div>
+           )}
+       </div>
+    );
   };
 
   const renderProjectDetail = () => {
@@ -622,74 +608,43 @@ const App: React.FC = () => {
                     <button onClick={handleSaveTask} className="w-full bg-[#E95D22] text-white py-3 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/20">حفظ التغييرات</button>
                 </div>
             </Modal>
-
-            <Modal isOpen={isEditProjectModalOpen} onClose={() => setIsEditProjectModalOpen(false)} title="تحديث صورة المشروع">
-                <div className="space-y-6">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">رفع صورة من الجهاز</label><label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors hover:border-[#E95D22]/50"><div className="flex flex-col items-center justify-center pt-5 pb-6"><UploadCloud className="w-8 h-8 mb-3 text-gray-400" /><p className="text-sm text-gray-500 mb-1"><span className="font-bold text-[#E95D22]">اضغط هنا</span> لرفع صورة</p></div><input type="file" className="hidden" accept="image/*" onChange={handleFileChange} /></label></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">رابط الصورة (URL)</label><input type="text" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#E95D22] outline-none" placeholder="https://example.com/image.jpg" value={editProjectImageUrl} onChange={(e) => setEditProjectImageUrl(e.target.value)} dir="ltr" /></div>
-                    <button onClick={handleSaveProjectImage} className="w-full bg-[#E95D22] text-white py-3.5 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/20">حفظ التغييرات</button>
-                </div>
-            </Modal>
         </div>
     );
   };
-
-  const renderServiceOnly = () => {
-    const title = currentUser?.role === 'CONVEYANCE' ? 'طلبات الإفراغ العقاري' : 'الدعم الفني';
-    const subTitle = currentUser?.role === 'CONVEYANCE' ? 'إدارة طلبات الإفراغ ومتابعة حالتها' : 'تقديم ومتابعة الطلبات الفنية للمشاريع';
-    return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div><h2 className="text-2xl font-bold text-[#1B2B48] mb-2">{title}</h2><p className="text-gray-500">{subTitle}</p></div>
-                <button onClick={() => {setIsRequestModalOpen(true); setIsBulkMode(false); setBulkPreviewData([]);}} className="bg-[#E95D22] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/20 flex items-center gap-2"><Plus className="w-5 h-5" />طلب جديد</button>
-            </div>
-            <h3 className="font-bold text-lg text-[#1B2B48] px-2">سجل طلباتي</h3>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-50 text-gray-700 font-bold"><tr><th className="px-6 py-4">رقم الطلب</th><th className="px-6 py-4">النوع</th><th className="px-6 py-4">المشروع</th><th className="px-6 py-4">الحالة</th><th className="px-6 py-4">التاريخ</th></tr></thead><tbody className="divide-y divide-gray-100">{serviceRequests.filter(r => r.submittedBy === currentUser?.name).map(req => (<tr key={req.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 font-mono text-gray-500">#{req.id.slice(-6)}</td><td className="px-6 py-4 font-bold text-[#1B2B48]">{req.name}</td><td className="px-6 py-4 text-gray-600">{req.projectName || '-'}</td><td className="px-6 py-4"><span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${req.status === 'completed' ? 'bg-green-100 text-green-700' : req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{req.status === 'new' ? 'جديد' : req.status === 'completed' ? 'مكتمل' : req.status === 'rejected' ? 'مرفوض' : req.status}</span></td><td className="px-6 py-4 text-gray-500" dir="ltr">{req.date}</td></tr>))}</tbody></table></div>
-            <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="طلب خدمة جديد">
-                <div className="space-y-4">
-                    {currentUser?.role === 'CONVEYANCE' && (<div className="flex p-1 bg-gray-100 rounded-xl mb-4"><button onClick={() => setIsBulkMode(false)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${!isBulkMode ? 'bg-white shadow-sm text-[#E95D22]' : 'text-gray-500'}`}>إدخال يدوي</button><button onClick={() => setIsBulkMode(true)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${isBulkMode ? 'bg-white shadow-sm text-[#E95D22]' : 'text-gray-500'}`}><FileSpreadsheet className="w-4 h-4" />رفع ملف Excel</button></div>)}
-                    {isBulkMode ? (<div className="space-y-6 animate-in fade-in"><button onClick={handleDownloadTemplate} className="w-full border-2 border-dashed border-gray-300 rounded-xl p-4 flex items-center justify-center gap-2 text-gray-600 hover:border-[#E95D22] hover:text-[#E95D22] transition-colors"><Download className="w-5 h-5" />تحميل نموذج الإكسل</button><input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#E95D22]/10 file:text-[#E95D22] hover:file:bg-[#E95D22]/20" /><button onClick={handleCreateRequest} disabled={bulkPreviewData.length === 0} className="w-full bg-[#E95D22] text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#d14912] transition-colors">اعتماد الطلبات ({bulkPreviewData.length})</button></div>) : (
-                        <>{currentUser?.role === 'TECHNICAL' ? (<><div><label className="block text-sm font-medium text-gray-700 mb-1">نوع الخدمة</label><select className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl" onChange={(e) => setNewRequestData({...newRequestData, serviceSubType: e.target.value})}><option value="">اختر نوع الخدمة...</option>{TECHNICAL_SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">المشروع</label><select className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl" onChange={(e) => setNewRequestData({...newRequestData, projectName: e.target.value})}><option value="">اختر المشروع...</option>{projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select></div></>) : (<><div><label className="block text-sm font-medium text-gray-700 mb-1">اسم العميل</label><input type="text" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl" onChange={(e) => setNewRequestData({...newRequestData, clientName: e.target.value})} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">المشروع</label><select className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl" onChange={(e) => setNewRequestData({...newRequestData, projectName: e.target.value})}><option value="">اختر المشروع...</option>{projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select></div></>)}<button onClick={handleCreateRequest} className="w-full bg-[#E95D22] text-white py-3 rounded-xl font-bold mt-4 hover:bg-[#d14912] transition-colors">إرسال الطلب</button></>
-                    )}
-                </div>
-            </Modal>
-        </div>
-    );
-  };
-
-  const renderRequestsDashboard = () => (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-        <h2 className="text-2xl font-bold text-[#1B2B48] mb-4">الطلبات الواردة</h2>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-50 text-gray-700 font-bold"><tr><th className="px-6 py-4">رقم الطلب</th><th className="px-6 py-4">النوع</th><th className="px-6 py-4">مقدم الطلب</th><th className="px-6 py-4">الحالة</th><th className="px-6 py-4">إجراء</th></tr></thead><tbody className="divide-y divide-gray-100">{serviceRequests.map(req => (<tr key={req.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 font-mono text-gray-500">#{req.id.slice(-6)}</td><td className="px-6 py-4 font-bold text-[#1B2B48]">{req.name}</td><td className="px-6 py-4 text-gray-600">{req.submittedBy} <span className="text-xs text-gray-400 block">{req.role}</span></td><td className="px-6 py-4"><span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${req.status === 'completed' ? 'bg-green-100 text-green-700' : req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{req.status === 'new' ? 'جديد' : req.status === 'completed' ? 'مكتمل' : req.status === 'rejected' ? 'مرفوض' : req.status}</span></td><td className="px-6 py-4"><button onClick={() => setSelectedRequest(req)} className="text-[#E95D22] hover:bg-[#E95D22]/10 px-3 py-1 rounded-lg transition-colors text-xs font-bold">عرض التفاصيل</button></td></tr>))}</tbody></table></div>
-        <Modal isOpen={!!selectedRequest} onClose={() => setSelectedRequest(null)} title="تفاصيل الطلب">
-            {selectedRequest && (<div className="space-y-6"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-3 bg-gray-50 rounded-xl"><span className="text-gray-500 block text-xs">رقم الطلب</span><span className="font-bold text-[#1B2B48]">#{selectedRequest.id}</span></div><div className="p-3 bg-gray-50 rounded-xl"><span className="text-gray-500 block text-xs">تاريخ الطلب</span><span className="font-bold text-[#1B2B48]">{selectedRequest.date}</span></div></div><div className="border-t border-gray-100 pt-4"><h4 className="font-bold text-[#1B2B48] mb-2">تفاصيل الخدمة</h4><p className="text-gray-600 bg-gray-50 p-4 rounded-xl text-sm leading-relaxed">{selectedRequest.details || selectedRequest.name}</p></div><div className="flex gap-3 pt-2"><button onClick={() => handleUpdateStatus(selectedRequest.id, 'completed')} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> قبول / إكمال</button><button onClick={() => handleUpdateStatus(selectedRequest.id, 'rejected')} className="flex-1 bg-red-50 text-red-500 py-2.5 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"><XCircle className="w-4 h-4" /> رفض الطلب</button></div></div>)}
-        </Modal>
-    </div>
-  );
-
-  const renderLogin = () => (
-    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
-            <div className="bg-[#1B2B48] p-8 text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-[#E95D22]/10 blur-3xl rounded-full transform -translate-y-1/2 scale-150"></div>
-                <img src={LOGO_URL} alt="Logo" className="h-24 mx-auto bg-white rounded-2xl p-2 mb-4 shadow-lg relative z-10" />
-                <h2 className="text-2xl font-bold text-white relative z-10">تسجيل الدخول</h2>
-                <p className="text-blue-200 text-sm mt-2 relative z-10">نظام متابعة المشاريع - دار وإعمار</p>
-            </div>
-            <form onSubmit={handleLogin} className="p-8 space-y-6">
-                <div><label className="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label><input type="email" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@dar.sa" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-2">كلمة المرور</label><input type="password" required className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#E95D22] focus:ring-4 focus:ring-[#E95D22]/10 outline-none transition-all" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></div>
-                <button type="submit" className="w-full bg-[#E95D22] text-white py-3.5 rounded-xl font-bold hover:bg-[#d14912] transition-colors shadow-lg shadow-[#E95D22]/30 active:scale-[0.98]">تسجيل الدخول</button>
-            </form>
-        </div>
-    </div>
-  );
-
-  if (view === 'LOGIN') return renderLogin();
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden" dir="rtl">
-        {renderSidebar()}
+        {/* Sidebar */}
+        {currentUser && (
+          <>
+            {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+            <div className={`fixed inset-y-0 right-0 z-50 w-64 bg-[#1B2B48] text-white transform transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 md:static md:flex flex-col h-screen`}>
+              <div className="p-6 flex flex-col items-center border-b border-gray-700 relative">
+                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden absolute top-4 left-4 text-gray-400 hover:text-white"><X size={20} /></button>
+                 <img src={LOGO_URL} alt="Logo" className="h-16 mb-4 bg-white rounded-lg p-1" />
+                 <h2 className="font-bold text-lg">دار وإعمار</h2>
+                 <p className="text-xs text-gray-400 mt-1">{currentUser.name}</p>
+              </div>
+              <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                 {[
+                   { id: 'DASHBOARD', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER'] },
+                   { id: 'REQUESTS', label: 'الطلبات', icon: FileText, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER', 'FINANCE'] },
+                   { id: 'SERVICE_ONLY', label: 'طلب خدمة', icon: Plus, roles: ['TECHNICAL', 'CONVEYANCE'] },
+                   { id: 'USERS', label: 'المستخدمين', icon: Users, roles: ['ADMIN'] },
+                 ].filter(item => item.roles.includes(currentUser.role)).map(item => (
+                   <button key={item.id} onClick={() => { setView(item.id as ViewState); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${view === item.id ? 'bg-[#E95D22] text-white shadow-lg shadow-[#E95D22]/30 font-medium' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}>
+                     <item.icon className="w-5 h-5" />
+                     <span>{item.label}</span>
+                   </button>
+                 ))}
+              </nav>
+              <div className="p-4 border-t border-gray-700">
+                 <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"><LogOut className="w-5 h-5" /><span>تسجيل خروج</span></button>
+              </div>
+            </div>
+          </>
+        )}
+        
         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
             <header className="bg-white border-b border-gray-100 p-4 md:hidden flex justify-between items-center sticky top-0 z-20">
                  <div className="flex items-center gap-2"><img src={LOGO_URL} className="h-8" alt="Logo" /><h1 className="font-bold text-[#1B2B48]">دار وإعمار</h1></div>
@@ -698,13 +653,18 @@ const App: React.FC = () => {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
                 {view === 'DASHBOARD' && renderDashboard()}
                 {view === 'PROJECT_DETAIL' && renderProjectDetail()}
-                {view === 'REQUESTS' && renderRequestsDashboard()}
-                {view === 'SERVICE_ONLY' && renderServiceOnly()}
                 {view === 'USERS' && <div className="flex flex-col items-center justify-center h-full text-gray-400"><Users className="w-16 h-16 mb-4 opacity-20" /><p>إدارة المستخدمين</p></div>}
+                {/* Add other views as needed, currently limited to requested pages */}
             </main>
         </div>
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <ErrorBoundary>
+    <AppContent />
+  </ErrorBoundary>
+);
 
 export default App;
