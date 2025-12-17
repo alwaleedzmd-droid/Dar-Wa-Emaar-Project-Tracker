@@ -27,7 +27,7 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "dar-wa-emaar.firebaseapp.com",
   projectId: "dar-wa-emaar",
   storageBucket: "dar-wa-emaar.appspot.com",
