@@ -23,7 +23,7 @@ import Modal from './components/Modal';
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, collection, onSnapshot, 
-  query, orderBy
+  query, orderBy, addDoc, updateDoc, doc 
 } from "firebase/firestore";
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY, // يقرأ المفتاح المخفي من فيرسل
@@ -213,7 +213,39 @@ const App: React.FC = () => {
     } as ServiceRequest;
   };
 
-  const handleCreateRequest = () => {
+const handleCreateRequest = async () => {
+    if (!currentUser) return;
+    
+    // تجهيز بيانات الطلب
+    const reqData = createServiceRequestObject(newRequestData);
+
+    // 1. الحفظ في قاعدة البيانات (Firebase)
+    if (IS_FIREBASE_ENABLED && db) {
+        try {
+            // نستخدم addDoc لإرسال البيانات إلى مجموعة "requests"
+            await addDoc(collection(db, "requests"), reqData);
+        } catch (error) {
+            console.error("Error saving to Firebase:", error);
+            alert("حدث خطأ أثناء الحفظ، تأكد من الاتصال بالإنترنت");
+            return; 
+        }
+    }
+
+    // 2. التحديث المحلي (للعرض الفوري)
+    if (isBulkMode && bulkPreviewData.length > 0) {
+        // في حالة الرفع الجماعي (سنكتفي بالتحديث المحلي مؤقتاً للتبسيط)
+        const newRequests = bulkPreviewData.map(data => createServiceRequestObject(data));
+        setServiceRequests(prev => [...newRequests, ...prev]);
+        setIsBulkMode(false);
+        setBulkPreviewData([]);
+    } else {
+        // الإضافة الفردية
+        setServiceRequests(prev => [reqData, ...prev]);
+    }
+    
+    setIsRequestModalOpen(false);
+    setNewRequestData({});
+  };
     if (!currentUser) return;
     
     if (isBulkMode && bulkPreviewData.length > 0) {
