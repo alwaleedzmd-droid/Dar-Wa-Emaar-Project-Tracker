@@ -25,17 +25,17 @@ import {
   getFirestore, collection, onSnapshot, 
   query, orderBy
 } from "firebase/firestore";
-
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY, // يقرأ المفتاح المخفي من فيرسل
   authDomain: "dar-wa-emaar.firebaseapp.com",
   projectId: "dar-wa-emaar",
-  storageBucket: "dar-wa-emaar.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  storageBucket: "dar-wa-emaar.firebasestorage.app",
+  messagingSenderId: "916360008812",
+  appId: "1:916360008812:web:58d2b6f38d723ebe37f449"
 };
 
-const IS_FIREBASE_ENABLED = false;
+// تفعيل قاعدة البيانات الآن
+const IS_FIREBASE_ENABLED = true;
 let app;
 let db: any;
 
