@@ -479,7 +479,7 @@ const AppContent: React.FC = () => {
                   {new Date(comment.timestamp).toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                 </span>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
+              <p className="text-sm text-gray-700 leading-relaxed tracking-normal">{comment.text}</p>
             </div>
           ))
         ) : (
@@ -494,7 +494,7 @@ const AppContent: React.FC = () => {
       <input 
         type="text" 
         placeholder="أضف تعليقاً..." 
-        className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 ring-orange-500/10 outline-none"
+        className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 ring-orange-500/10 outline-none text-right tracking-normal font-cairo"
         value={newCommentText}
         onChange={e => setNewCommentText(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && onAdd()}
@@ -538,9 +538,9 @@ const AppContent: React.FC = () => {
           <div className="flex gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input type="text" placeholder="بحث عن مشروع..." className="w-full pr-10 pl-4 py-2 rounded-xl border border-gray-200" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <input type="text" placeholder="بحث عن مشروع..." className="w-full pr-10 pl-4 py-2 rounded-xl border border-gray-200 text-right tracking-normal" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <select className="px-4 py-2 rounded-xl border border-gray-200" value={locationFilter} onChange={e => setLocationFilter(e.target.value)}>
+            <select className="px-4 py-2 rounded-xl border border-gray-200 text-right tracking-normal" value={locationFilter} onChange={e => setLocationFilter(e.target.value)}>
               <option value="All">كل المدن</option>
               {LOCATIONS_ORDER.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
@@ -616,9 +616,9 @@ const AppContent: React.FC = () => {
           
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-400 block pr-1">نوع الطلب</label>
+              <label className="text-sm font-bold text-gray-400 block pr-1 text-right">نوع الطلب</label>
               <select 
-                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 text-[#1B2B48] font-bold outline-none focus:ring-2 ring-orange-500/20 disabled:opacity-50"
+                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 text-[#1B2B48] font-bold outline-none focus:ring-2 ring-orange-500/20 disabled:opacity-50 text-right tracking-normal"
                 value={newRequest.type}
                 disabled={(currentUser?.role === 'CONVEYANCE' || currentUser?.role === 'TECHNICAL') && pendingGroupRequests.length === 0}
                 onChange={e => setNewRequest({...newRequest, type: e.target.value as any, authority: '', serviceSubType: ''})}
@@ -646,12 +646,12 @@ const AppContent: React.FC = () => {
             )}
 
             {isConv && conveyanceMode === 'group' ? (
-              <div className="space-y-6">
+              <div className="space-y-6 text-right">
                 {pendingGroupRequests.length === 0 ? (
                   <div className="py-10 text-center border-2 border-dashed border-orange-200 rounded-3xl bg-orange-50/30">
                     <FileSpreadsheet className="w-16 h-16 text-orange-500 mx-auto mb-4 opacity-50" />
-                    <p className="font-bold text-orange-600 mb-2">استيراد من ملف Excel</p>
-                    <p className="text-xs text-orange-400 mb-6 px-6 leading-relaxed">يرجى التأكد من أن الملف يحتوي على أعمدة واضحة لبيانات العملاء (اسم العميل، رقم الجوال، رقم الهوية، رقم القطعة، إلخ)</p>
+                    <p className="font-bold text-orange-600 mb-2 text-center">استيراد من ملف Excel</p>
+                    <p className="text-xs text-orange-400 mb-6 px-6 leading-relaxed text-center">يرجى التأكد من أن الملف يحتوي على أعمدة واضحة لبيانات العملاء (اسم العميل، رقم الجوال، رقم الهوية، رقم القطعة، إلخ)</p>
                     <input 
                         type="file" 
                         ref={fileInputRef}
@@ -661,7 +661,7 @@ const AppContent: React.FC = () => {
                     />
                     <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="bg-orange-500 text-white px-8 py-3 rounded-2xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+                        className="bg-orange-500 text-white px-8 py-3 rounded-2xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20 mx-auto block"
                     >
                         اختر الملف للبدء
                     </button>
@@ -704,7 +704,7 @@ const AppContent: React.FC = () => {
                     </div>
                     <div className="bg-orange-50 p-4 rounded-2xl flex items-start gap-3 border border-orange-100">
                         <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
-                        <p className="text-[10px] text-orange-700 leading-relaxed">
+                        <p className="text-[10px] text-orange-700 leading-relaxed text-right">
                             ملاحظة: سيتم إرسال كافة الطلبات أعلاه مباشرة إلى قائمة الانتظار للمراجعة. يرجى التأكد من دقة البيانات قبل المتابعة.
                         </p>
                     </div>
@@ -715,65 +715,65 @@ const AppContent: React.FC = () => {
               <div className="space-y-4">
                 {isConv ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="col-span-2 space-y-1.5">
+                    <div className="col-span-2 space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">اسم العميل</label>
-                      <input type="text" placeholder="اسم العميل" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.clientName || ''} onChange={e => setNewRequest({...newRequest, clientName: e.target.value})} />
+                      <input type="text" placeholder="اسم العميل" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal" value={newRequest.clientName || ''} onChange={e => setNewRequest({...newRequest, clientName: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">رقم الجوال</label>
-                      <input type="text" placeholder="05xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.mobileNumber || ''} onChange={e => setNewRequest({...newRequest, mobileNumber: e.target.value})} />
+                      <input type="text" placeholder="05xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.mobileNumber || ''} onChange={e => setNewRequest({...newRequest, mobileNumber: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">رقم الهوية</label>
-                      <input type="text" placeholder="10xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.idNumber || ''} onChange={e => setNewRequest({...newRequest, idNumber: e.target.value})} />
+                      <input type="text" placeholder="10xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.idNumber || ''} onChange={e => setNewRequest({...newRequest, idNumber: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">المشروع</label>
-                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
                         <option value="">اختر المشروع...</option>
                         {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">رقم القطعة</label>
-                      <input type="text" placeholder="رقم القطعة" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.unitNumber || ''} onChange={e => setNewRequest({...newRequest, unitNumber: e.target.value})} />
+                      <input type="text" placeholder="رقم القطعة" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.unitNumber || ''} onChange={e => setNewRequest({...newRequest, unitNumber: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">رقم الصك</label>
-                      <input type="text" placeholder="اختياري" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.deedNumber || ''} onChange={e => setNewRequest({...newRequest, deedNumber: e.target.value})} />
+                      <input type="text" placeholder="اختياري" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.deedNumber || ''} onChange={e => setNewRequest({...newRequest, deedNumber: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">البنك</label>
-                      <input type="text" placeholder="البنك الممول" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.bank || ''} onChange={e => setNewRequest({...newRequest, bank: e.target.value})} />
+                      <input type="text" placeholder="البنك الممول" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.bank || ''} onChange={e => setNewRequest({...newRequest, bank: e.target.value})} />
                     </div>
-                    <div className="col-span-2 space-y-1.5">
+                    <div className="col-span-2 space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">قيمة العقار</label>
-                      <input type="text" placeholder="القيمة الإجمالية" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.propertyValue || ''} onChange={e => setNewRequest({...newRequest, propertyValue: e.target.value})} />
+                      <input type="text" placeholder="القيمة الإجمالية" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none text-right tracking-normal" value={newRequest.propertyValue || ''} onChange={e => setNewRequest({...newRequest, propertyValue: e.target.value})} />
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">نوع الخدمة</label>
-                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.serviceSubType || ''} onChange={e => setNewRequest({...newRequest, serviceSubType: e.target.value})}>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal" value={newRequest.serviceSubType || ''} onChange={e => setNewRequest({...newRequest, serviceSubType: e.target.value})}>
                         <option value="">اختر نوع الخدمة...</option>
                         {TECHNICAL_SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">وصف الخدمة</label>
-                      <textarea placeholder="أدخل تفاصيل الطلب هنا..." className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 h-28 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.details || ''} onChange={e => setNewRequest({...newRequest, details: e.target.value})} />
+                      <textarea placeholder="أدخل تفاصيل الطلب هنا..." className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 h-28 outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal leading-relaxed" value={newRequest.details || ''} onChange={e => setNewRequest({...newRequest, details: e.target.value})} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">المشروع</label>
-                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
                         <option value="">اختر المشروع...</option>
                         {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 text-right">
                       <label className="text-xs font-bold text-gray-400 pr-1">الجهة</label>
-                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.authority || ''} onChange={e => setNewRequest({...newRequest, authority: e.target.value})}>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal" value={newRequest.authority || ''} onChange={e => setNewRequest({...newRequest, authority: e.target.value})}>
                         <option value="">اختر الجهة المستهدفة...</option>
                         {GOVERNMENT_AUTHORITIES.map(a => <option key={a} value={a}>{a}</option>)}
                       </select>
@@ -840,7 +840,7 @@ const AppContent: React.FC = () => {
           <div className="grid grid-cols-1 gap-4">
             {filteredRequests.map(req => (
               <div key={req.id} onClick={() => { setSelectedRequest(req); setIsRequestDetailOpen(true); }} className="bg-white p-6 rounded-3xl border border-gray-100 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden group">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 text-right">
                   <div className={`p-4 rounded-2xl transition-colors ${req.type === 'conveyance' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
                     {req.type === 'conveyance' ? <Building className="w-6 h-6" /> : <Settings className="w-6 h-6" />}
                   </div>
@@ -905,13 +905,13 @@ const AppContent: React.FC = () => {
         </div>
         
         <form onSubmit={handleLogin} className="p-10 bg-white space-y-6 rounded-t-[50px] text-right">
-          <div className="space-y-4">
+          <div className="space-y-4 text-right">
             <div className="relative">
               <UserIcon className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input 
                 type="email" 
                 placeholder="البريد الإلكتروني" 
-                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right" 
+                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right tracking-normal" 
                 value={loginData.email} 
                 onChange={e => setLoginData({...loginData, email: e.target.value})} 
                 required 
@@ -922,7 +922,7 @@ const AppContent: React.FC = () => {
               <input 
                 type="password" 
                 placeholder="كلمة المرور" 
-                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right" 
+                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right tracking-normal" 
                 value={loginData.password} 
                 onChange={e => setLoginData({...loginData, password: e.target.value})} 
                 required 
@@ -1057,7 +1057,7 @@ const AppContent: React.FC = () => {
                 العودة للرئيسية
               </button>
               <div className="bg-white rounded-[40px] p-10 shadow-sm border border-gray-100 text-right">
-                <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6">
+                <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6 text-right">
                   <div>
                     <h2 className="text-4xl font-bold mb-2 text-[#1B2B48]">{selectedProject.name}</h2>
                     <div className="flex items-center gap-1.5 text-orange-500 font-bold bg-orange-50 px-3 py-1 rounded-full w-fit">
@@ -1076,7 +1076,7 @@ const AppContent: React.FC = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                  <div className="lg:col-span-1 space-y-6">
+                  <div className="lg:col-span-1 space-y-6 text-right">
                     <div className="bg-[#1B2B48] text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden group">
                        <ShieldCheck className="absolute -bottom-8 -left-8 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity" />
                        <h4 className="font-bold text-xl mb-6 flex items-center gap-2">
@@ -1093,7 +1093,7 @@ const AppContent: React.FC = () => {
                       <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="w-full bg-[#E95D22] text-white py-5 rounded-[30px] font-bold text-lg shadow-xl shadow-orange-500/20 hover:scale-[1.02] transition-transform active:scale-95">إضافة عمل جديد</button>
                     )}
                   </div>
-                  <div className="lg:col-span-2 space-y-4">
+                  <div className="lg:col-span-2 space-y-4 text-right">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                       <h3 className="text-2xl font-bold text-[#1B2B48]">بيان الأعمال</h3>
                       <div className="flex bg-gray-100 p-1 rounded-2xl w-full sm:w-auto">
@@ -1102,14 +1102,14 @@ const AppContent: React.FC = () => {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-4 text-right">
                       {selectedProject.tasks.filter(t => taskFilter === 'All' || t.status === taskFilter).length > 0 ? (
                         selectedProject.tasks.filter(t => taskFilter === 'All' || t.status === taskFilter).map(task => (
                           <TaskCard key={task.id} task={task} onEdit={t => { setEditingTask(t); setNewTaskData(t); setIsTaskModalOpen(true); }} />
                         ))
                       ) : (
                         <div className="bg-white p-12 rounded-3xl border border-dashed border-gray-200 text-center">
-                          <p className="text-gray-400">لا توجد أعمال لعرضها</p>
+                          <p className="text-gray-400 text-center">لا توجد أعمال لعرضها</p>
                         </div>
                       )}
                     </div>
@@ -1124,40 +1124,40 @@ const AppContent: React.FC = () => {
       {/* Modals */}
       <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="إضافة مشروع جديد">
         <div className="space-y-4 text-right">
-          <input type="text" placeholder="اسم المشروع" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.location} onChange={e => setNewProject({...newProject, location: e.target.value})}>
+          <input type="text" placeholder="اسم المشروع" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal font-cairo" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal font-cairo" value={newProject.location} onChange={e => setNewProject({...newProject, location: e.target.value})}>
             {LOCATIONS_ORDER.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
-          <input type="text" placeholder="رابط صورة المشروع (اختياري)" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.imageUrl || ''} onChange={e => setNewProject({...newProject, imageUrl: e.target.value})} />
+          <input type="text" placeholder="رابط صورة المشروع (اختياري)" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal font-cairo" value={newProject.imageUrl || ''} onChange={e => setNewProject({...newProject, imageUrl: e.target.value})} />
           <button onClick={handleCreateProject} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#1B2B48]/20 hover:bg-opacity-90 transition-colors">حفظ المشروع</button>
         </div>
       </Modal>
 
       <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="إضافة موظف جديد">
         <div className="space-y-4 text-right">
-          <input type="text" placeholder="اسم الموظف" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
+          <input type="text" placeholder="اسم الموظف" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right tracking-normal font-cairo" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right tracking-normal font-cairo" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right tracking-normal font-cairo" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
             <option value="PR_MANAGER">مدير علاقات عامة</option>
             <option value="PR_OFFICER">مسؤول علاقات عامة</option>
             <option value="FINANCE">المالية</option>
             <option value="TECHNICAL">القسم الفني</option>
             <option value="CONVEYANCE">موظف إفراغ</option>
           </select>
-          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right tracking-normal font-cairo" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
           <button onClick={handleCreateUser} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-colors">إضافة الموظف</button>
         </div>
       </Modal>
 
       <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'تعديل عمل' : 'إضافة عمل جديد'}>
         <div className="space-y-4 text-right">
-          <textarea placeholder="بيان العمل" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.description || ''} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} />
-          <input type="text" placeholder="جهة المراجعة" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.reviewer || ''} onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.status || 'متابعة'} onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}>
+          <textarea placeholder="بيان العمل" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal leading-relaxed font-cairo" value={newTaskData.description || ''} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} />
+          <input type="text" placeholder="جهة المراجعة" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal font-cairo" value={newTaskData.reviewer || ''} onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal font-cairo" value={newTaskData.status || 'متابعة'} onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}>
             <option value="متابعة">متابعة</option>
             <option value="منجز">منجز</option>
           </select>
-          <textarea placeholder="ملاحظات" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.notes || ''} onChange={e => setNewTaskData({...newTaskData, notes: e.target.value})} />
+          <textarea placeholder="ملاحظات" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right tracking-normal leading-relaxed font-cairo" value={newTaskData.notes || ''} onChange={e => setNewTaskData({...newTaskData, notes: e.target.value})} />
           
           <button onClick={handleSaveTask} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#1B2B48]/20 hover:bg-opacity-90 transition-colors">حفظ البيانات الأساسية</button>
 
@@ -1173,14 +1173,14 @@ const AppContent: React.FC = () => {
       <Modal isOpen={isRequestDetailOpen} onClose={() => setIsRequestDetailOpen(false)} title="تفاصيل الطلب">
         {selectedRequest && (
           <div className="space-y-6 font-cairo text-right">
-            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-gray-400 block mb-1">المشروع</span><span className="font-bold">{selectedRequest.projectName}</span></div>
-                <div><span className="text-gray-400 block mb-1">تاريخ الطلب</span><span className="font-bold">{selectedRequest.date}</span></div>
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 text-right">
+              <div className="grid grid-cols-2 gap-4 text-sm text-right">
+                <div className="text-right"><span className="text-gray-400 block mb-1">المشروع</span><span className="font-bold">{selectedRequest.projectName}</span></div>
+                <div className="text-right"><span className="text-gray-400 block mb-1">تاريخ الطلب</span><span className="font-bold">{selectedRequest.date}</span></div>
                 {selectedRequest.type === 'conveyance' ? (
-                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200">
-                    <p className="font-bold mb-2 text-[#1B2B48]">بيانات الإفراغ:</p>
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200 text-right">
+                    <p className="font-bold mb-2 text-[#1B2B48] text-right">بيانات الإفراغ:</p>
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-right">
                       <p className="flex justify-between mb-2"><span>اسم العميل:</span> <span className="font-bold">{selectedRequest.clientName}</span></p>
                       <p className="flex justify-between mb-2"><span>رقم الجوال:</span> <span className="font-bold">{selectedRequest.mobileNumber || '-'}</span></p>
                       <p className="flex justify-between mb-2"><span>رقم الهوية:</span> <span className="font-bold">{selectedRequest.idNumber}</span></p>
@@ -1191,18 +1191,18 @@ const AppContent: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200">
-                    <p className="font-bold mb-2 text-[#1B2B48]">بيانات الخدمة الفنية:</p>
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200 text-right">
+                    <p className="font-bold mb-2 text-[#1B2B48] text-right">بيانات الخدمة الفنية:</p>
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-right">
                       <p className="flex justify-between mb-2"><span>نوع الخدمة:</span> <span className="font-bold">{selectedRequest.serviceSubType}</span></p>
                       <p className="flex justify-between mb-2"><span>الجهة المستهدفة:</span> <span className="font-bold">{selectedRequest.authority || '-'}</span></p>
                     </div>
                   </div>
                 )}
                 {selectedRequest.details && (
-                  <div className="col-span-2 mt-2">
+                  <div className="col-span-2 mt-2 text-right">
                     <span className="text-gray-400 block mb-1">الوصف والتفاصيل:</span>
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 text-sm leading-relaxed text-gray-700 shadow-sm">
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 text-sm leading-relaxed text-gray-700 shadow-sm text-right tracking-normal">
                       {selectedRequest.details}
                     </div>
                   </div>
@@ -1218,7 +1218,7 @@ const AppContent: React.FC = () => {
                   <input 
                     type="text" 
                     placeholder="أدخل تعليقك هنا قبل اتخاذ الإجراء..." 
-                    className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 ring-orange-500/10 outline-none text-right"
+                    className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 ring-orange-500/10 outline-none text-right tracking-normal font-cairo"
                     value={newCommentText}
                     onChange={e => setNewCommentText(e.target.value)}
                   />
