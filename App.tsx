@@ -1,25 +1,46 @@
 
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode, useRef } from 'react';
 import { 
   LayoutDashboard, Users, FileText, Settings, LogOut, 
-  Plus, ChevronRight, History as HistoryIcon, 
+  Plus, ChevronRight, ChevronLeft, History as HistoryIcon, 
   FileCheck, User as UserIcon, UploadCloud,
   Menu, X, ArrowLeft, CheckCircle, XCircle, AlertCircle,
   ImageIcon, Pin, Search, Filter, Trash2, Loader2, 
-  Send, Clock, CheckCircle2, ShieldCheck, UserPlus, Building
+  Send, Clock, CheckCircle2, ShieldCheck, UserPlus, Building, 
+  MessageSquare, MessageCirclePlus, MapPin, FileSpreadsheet,
+  ListChecks, AlertTriangle, RotateCcw, ThumbsUp, ThumbsDown,
+  Building2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { 
   Task, ProjectSummary, User, ServiceRequest, RequestStatus, 
-  ViewState, UserRole
+  ViewState, UserRole, Comment
 } from './types';
 import { 
-  INITIAL_USERS, RAW_CSV_DATA, LOGO_URL,
-  LOCATIONS_ORDER, TECHNICAL_SERVICE_TYPES
+  INITIAL_USERS, RAW_CSV_DATA, DAR_LOGO,
+  LOCATIONS_ORDER, TECHNICAL_SERVICE_TYPES, GOVERNMENT_AUTHORITIES
 } from './constants';
 import ProjectCard from './components/ProjectCard';
 import TaskCard from './components/TaskCard';
 import Modal from './components/Modal';
+
+// Simplified Robust Logo Component
+const Logo: React.FC<{ className?: string, collapsed?: boolean }> = ({ className, collapsed }) => {
+  return (
+    <div className={`${className} flex flex-col items-center justify-center transition-all duration-500`}>
+      <img 
+        src={DAR_LOGO} 
+        className="w-full h-full object-contain rounded-3xl shadow-xl shadow-black/20" 
+        alt="Dar Wa Emaar Logo" 
+      />
+      {!collapsed && className?.includes('h-48') && (
+        <div className="mt-4">
+           {/* Placeholder for optional text under the main login logo */}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const safeStorage = {
   getItem: (key: string): string | null => {
@@ -31,15 +52,19 @@ const safeStorage = {
 };
 
 const STORAGE_KEYS = {
-    PROJECTS: 'dar_projects_v3',
-    USERS: 'dar_users_v3',
-    REQUESTS: 'dar_requests_v3'
+    PROJECTS: 'dar_projects_v5',
+    USERS: 'dar_users_v5',
+    REQUESTS: 'dar_requests_v5',
+    SIDEBAR_COLLAPSED: 'dar_sidebar_collapsed_v1'
 };
 
-// Fixed ErrorBoundary to extend React.Component explicitly and correctly typed props/state to resolve the 'props' access error
-class ErrorBoundary extends React.Component<{children: ReactNode}, {hasError: boolean}> {
-  constructor(props: {children: ReactNode}) {
+class ErrorBoundary extends React.Component<{children?: ReactNode}, {hasError: boolean}> {
+  public state: { hasError: boolean };
+  public props: { children?: ReactNode };
+
+  constructor(props: {children?: ReactNode}) {
     super(props);
+    this.props = props;
     this.state = { hasError: false };
   }
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -71,6 +96,9 @@ const AppContent: React.FC = () => {
 
   // --- UI State ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return safeStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === 'true';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('All');
   const [taskFilter, setTaskFilter] = useState('All');
@@ -87,8 +115,16 @@ const AppContent: React.FC = () => {
   const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', role: 'PR_OFFICER', password: '123' });
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTaskData, setNewTaskData] = useState<Partial<Task>>({});
-  const [newRequest, setNewRequest] = useState<Partial<ServiceRequest>>({ projectName: '' });
+  const [newRequest, setNewRequest] = useState<Partial<ServiceRequest>>({ projectName: '', type: 'conveyance' });
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
+  
+  // New State for submission modes
+  const [conveyanceMode, setConveyanceMode] = useState<'individual' | 'group'>('individual');
+  const [pendingGroupRequests, setPendingGroupRequests] = useState<ServiceRequest[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Commenting UI State
+  const [newCommentText, setNewCommentText] = useState('');
 
   // --- Initialization ---
   useEffect(() => {
@@ -105,7 +141,6 @@ const AppContent: React.FC = () => {
       if (savedProjects) {
         setProjects(JSON.parse(savedProjects));
       } else {
-        // Load from CSV fallback
         const lines = RAW_CSV_DATA.trim().split('\n').slice(1);
         const parsed: ProjectSummary[] = [];
         const grouped: Record<string, Task[]> = {};
@@ -116,7 +151,8 @@ const AppContent: React.FC = () => {
             const task: Task = {
               id: `t-${i}`, project: parts[0], description: parts[1],
               reviewer: parts[2], requester: parts[3], notes: parts[4],
-              location: parts[5], status: parts[6], date: parts[7] || ''
+              location: parts[5], status: parts[6], date: parts[7] || '',
+              comments: []
             };
             if (!grouped[task.project]) grouped[task.project] = [];
             grouped[task.project].push(task);
@@ -145,8 +181,9 @@ const AppContent: React.FC = () => {
       safeStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
       safeStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
       safeStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(serviceRequests));
+      safeStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, String(isSidebarCollapsed));
     }
-  }, [projects, users, serviceRequests, isLoading]);
+  }, [projects, users, serviceRequests, isLoading, isSidebarCollapsed]);
 
   // --- Handlers ---
   const handleLogin = (e: React.FormEvent) => {
@@ -203,7 +240,8 @@ const AppContent: React.FC = () => {
         description: newTaskData.description || '', reviewer: newTaskData.reviewer || '',
         requester: newTaskData.requester || currentUser?.name || '',
         notes: newTaskData.notes || '', location: selectedProject.location,
-        status: newTaskData.status || 'متابعة', date: new Date().toISOString().split('T')[0]
+        status: newTaskData.status || 'متابعة', date: new Date().toISOString().split('T')[0],
+        comments: []
       };
       updatedTasks = [task, ...updatedTasks];
     }
@@ -222,45 +260,187 @@ const AppContent: React.FC = () => {
     setNewTaskData({});
   };
 
+  const handleAddCommentToTask = () => {
+    if (!newCommentText.trim() || !editingTask || !selectedProject) return;
+    
+    const comment: Comment = {
+      id: Date.now().toString(),
+      text: newCommentText,
+      author: currentUser?.name || 'مستخدم',
+      authorRole: currentUser?.role || 'مجهول',
+      timestamp: new Date().toISOString()
+    };
+
+    const updatedTask: Task = {
+      ...editingTask,
+      comments: [...(editingTask.comments || []), comment]
+    };
+
+    const updatedTasks = selectedProject.tasks.map(t => t.id === editingTask.id ? updatedTask : t);
+    const updatedProj = { ...selectedProject, tasks: updatedTasks };
+
+    setProjects(projects.map(p => p.name === selectedProject.name ? updatedProj : p));
+    setSelectedProject(updatedProj);
+    setEditingTask(updatedTask);
+    setNewCommentText('');
+  };
+
+  const handleAddCommentToRequest = () => {
+    if (!newCommentText.trim() || !selectedRequest) return;
+
+    const comment: Comment = {
+      id: Date.now().toString(),
+      text: newCommentText,
+      author: currentUser?.name || 'مستخدم',
+      authorRole: currentUser?.role || 'مجهول',
+      timestamp: new Date().toISOString()
+    };
+
+    setServiceRequests(prev => prev.map(r => 
+      r.id === selectedRequest.id 
+      ? { ...r, comments: [...(r.comments || []), comment] } 
+      : r
+    ));
+    
+    setSelectedRequest(prev => prev ? { ...prev, comments: [...(prev.comments || []), comment] } : null);
+    setNewCommentText('');
+  };
+
   const handleCreateRequest = () => {
+    const isConv = newRequest.type === 'conveyance';
+    
+    // Check if we have group requests to send
+    if (isConv && conveyanceMode === 'group') {
+        if (pendingGroupRequests.length === 0) {
+            alert('يرجى رفع ملف Excel للمجموعة أولاً');
+            return;
+        }
+        setServiceRequests(prev => [...pendingGroupRequests, ...prev]);
+        setPendingGroupRequests([]);
+        alert(`تم إرسال ${pendingGroupRequests.length} طلب إفراغ بنجاح`);
+        setView('REQUESTS');
+        return;
+    }
+
     if (!newRequest.projectName) return alert('يرجى اختيار المشروع');
-    const isConv = currentUser?.role === 'CONVEYANCE';
+    
     const req: ServiceRequest = {
       id: Math.random().toString(36).substr(2, 9),
-      name: isConv ? `إفراغ: ${newRequest.clientName}` : `${newRequest.serviceSubType}`,
+      name: isConv ? `إفراغ: ${newRequest.clientName || 'جديد'}` : `${newRequest.serviceSubType || 'دعم فني'}`,
       type: isConv ? 'conveyance' : 'technical',
       projectName: newRequest.projectName,
       details: newRequest.details || '',
       submittedBy: currentUser?.name || '',
       role: currentUser?.role || '',
-      status: isConv ? 'pending_finance' : 'new',
+      status: (isConv && !['ADMIN', 'PR_MANAGER'].includes(currentUser?.role || '')) ? 'pending_finance' : 'new',
       date: new Date().toISOString().split('T')[0],
       history: [{ action: 'إنشاء الطلب', by: currentUser?.name || '', role: currentUser?.role || '', timestamp: new Date().toISOString() }],
+      comments: [],
       ...newRequest
     } as ServiceRequest;
 
     setServiceRequests([req, ...serviceRequests]);
-    setNewRequest({ projectName: '' });
+    setNewRequest({ projectName: '', type: 'conveyance' });
     alert('تم إرسال الطلب بنجاح');
+    setView('REQUESTS');
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        try {
+            const bstr = evt.target?.result;
+            const wb = XLSX.read(bstr, { type: 'array' });
+            const wsname = wb.SheetNames[0];
+            const ws = wb.Sheets[wsname];
+            const data: any[] = XLSX.utils.sheet_to_json(ws);
+            
+            if (data.length === 0) {
+                alert('الملف فارغ أو لا يحتوي على بيانات صالحة');
+                return;
+            }
+
+            const newRequests: ServiceRequest[] = data.map((row: any) => {
+                const clientName = row['اسم العميل'] || row['العميل'] || 'بدون اسم';
+                const projectName = row['المشروع'] || newRequest.projectName || '';
+                
+                return {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: `إفراغ: ${clientName}`,
+                    type: 'conveyance',
+                    projectName: projectName,
+                    details: `طلب مجموعة من ملف Excel. رقم القطعة: ${row['رقم القطعة'] || row['القطعة'] || '-'}`,
+                    submittedBy: currentUser?.name || '',
+                    role: currentUser?.role || '',
+                    status: (['ADMIN', 'PR_MANAGER'].includes(currentUser?.role || '')) ? 'new' : 'pending_finance',
+                    date: new Date().toISOString().split('T')[0],
+                    history: [{ action: 'استيراد من ملف Excel (قيد التأكيد)', by: currentUser?.name || '', role: currentUser?.role || '', timestamp: new Date().toISOString() }],
+                    comments: [],
+                    clientName: clientName,
+                    mobileNumber: row['رقم الجوال'] || row['الجوال'] || '',
+                    idNumber: row['رقم الهوية'] || row['الهوية'] || '',
+                    unitNumber: row['رقم القطعة'] || row['القطعة'] || '',
+                    deedNumber: row['رقم الصك'] || row['الصك'] || '',
+                    bank: row['البنك'] || row['بنك'] || '',
+                    propertyValue: row['قيمة العقار'] || row['القيمة'] || ''
+                } as ServiceRequest;
+            });
+
+            setPendingGroupRequests(newRequests);
+            alert(`تم استيراد بيانات ${newRequests.length} عميل. يرجى مراجعة الجدول ثم الضغط على "إرسال كافة الطلبات"`);
+        } catch (error) {
+            console.error('Excel processing error:', error);
+            alert('حدث خطأ أثناء معالجة الملف. يرجى التأكد من الصيغة الصحيحة.');
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const updateRequestStatus = (reqId: string, status: RequestStatus, note?: string) => {
     setServiceRequests(prev => prev.map(r => {
       if (r.id === reqId) {
+        let finalComments = [...(r.comments || [])];
+        
+        // If there's a note (e.g. from the comment box), add it as a formal comment too
+        if (note && note.trim()) {
+           finalComments.push({
+             id: Date.now().toString() + Math.random(),
+             text: note,
+             author: currentUser?.name || 'مستخدم',
+             authorRole: currentUser?.role || 'مجهول',
+             timestamp: new Date().toISOString()
+           });
+        }
+
+        const statusAr = status === 'completed' ? 'منجز' : status === 'rejected' ? 'مرفوض' : status === 'revision' ? 'إعادة للتعديل' : status === 'new' ? 'معتمد' : status;
+
         const updated = {
-          ...r, status,
-          history: [...r.history, { action: `تغيير الحالة إلى ${status}`, by: currentUser?.name || '', role: currentUser?.role || '', timestamp: new Date().toISOString(), notes: note }]
+          ...r, 
+          status,
+          comments: finalComments,
+          history: [...r.history, { 
+            action: `تغيير الحالة إلى ${statusAr}`, 
+            by: currentUser?.name || '', 
+            role: currentUser?.role || '', 
+            timestamp: new Date().toISOString(), 
+            notes: note 
+          }]
         };
         
-        // If completed, add as a task to the project
         if (status === 'completed') {
           const proj = projects.find(p => p.name === r.projectName);
           if (proj) {
             const newTask: Task = {
               id: `req-${r.id}`, project: r.projectName, description: r.name,
-              reviewer: r.type === 'conveyance' ? 'كتابة العدل' : 'القسم الفني',
+              reviewer: r.authority || (r.type === 'conveyance' ? 'كتابة العدل' : 'القسم الفني'),
               requester: r.submittedBy, notes: r.details, location: proj.location,
-              status: 'منجز', date: new Date().toISOString().split('T')[0]
+              status: 'منجز', date: new Date().toISOString().split('T')[0],
+              comments: finalComments
             };
             const updatedTasks = [newTask, ...proj.tasks];
             const done = updatedTasks.filter(t => t.status === 'منجز').length;
@@ -272,11 +452,75 @@ const AppContent: React.FC = () => {
       }
       return r;
     }));
+    setNewCommentText('');
     setIsRequestDetailOpen(false);
   };
 
+  // --- Sub-components for Commenting ---
+  const CommentsList = ({ comments }: { comments?: Comment[] }) => (
+    <div className="space-y-4 mt-6 border-t pt-6">
+      <h5 className="font-bold flex items-center gap-2 text-[#1B2B48]">
+        <MessageSquare className="w-4 h-4 text-orange-500" />
+        التعليقات والمناقشات ({comments?.length || 0})
+      </h5>
+      <div className="max-h-64 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+        {comments && comments.length > 0 ? (
+          comments.map((comment) => (
+            <div key={comment.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col gap-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px] font-bold">
+                    {comment.author[0]}
+                  </div>
+                  <span className="font-bold text-xs">{comment.author}</span>
+                  <span className="text-[10px] text-gray-400 bg-gray-200/50 px-1.5 rounded-full uppercase">{comment.authorRole}</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-mono">
+                  {new Date(comment.timestamp).toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                </span>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-4 text-gray-400 text-xs italic">لا توجد تعليقات حتى الآن</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const CommentInput = ({ onAdd }: { onAdd: () => void }) => (
+    <div className="mt-4 flex gap-2">
+      <input 
+        type="text" 
+        placeholder="أضف تعليقاً..." 
+        className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 ring-orange-500/10 outline-none"
+        value={newCommentText}
+        onChange={e => setNewCommentText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && onAdd()}
+      />
+      <button 
+        onClick={onAdd}
+        className="p-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors shadow-sm"
+      >
+        <Send className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
   // --- Views ---
   const renderDashboard = () => {
+    // Basic protection for roles that shouldn't see the dashboard
+    if (['TECHNICAL', 'CONVEYANCE', 'FINANCE'].includes(currentUser?.role || '')) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          <ShieldCheck className="w-16 h-16 text-orange-500 opacity-20" />
+          <h3 className="text-xl font-bold text-[#1B2B48]">غير مصرح بالوصول</h3>
+          <p className="text-gray-400">لا تملك صلاحيات كافية لمشاهدة لوحة التحكم العامة.</p>
+        </div>
+      );
+    }
+
     const filtered = projects.filter(p => 
       (locationFilter === 'All' || p.location === locationFilter) &&
       (p.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -360,173 +604,485 @@ const AppContent: React.FC = () => {
   );
 
   const renderServiceOnly = () => {
-    const isConv = currentUser?.role === 'CONVEYANCE';
+    const isConv = newRequest.type === 'conveyance';
+    
     return (
-      <div className="max-w-2xl mx-auto py-8">
-        <div className="bg-white p-8 rounded-[40px] shadow-xl border border-gray-100">
-          <div className="text-center mb-8">
-            <div className="bg-orange-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4">
-              <Send className="w-10 h-10 text-[#E95D22]" />
-            </div>
-            <h2 className="text-2xl font-bold">{isConv ? 'طلب إفراغ عقاري' : 'طلب خدمة فنية'}</h2>
-            <p className="text-gray-400 mt-2">يرجى إدخال البيانات المطلوبة بدقة</p>
+      <div className="max-w-xl mx-auto py-4">
+        <div className="bg-white p-8 rounded-[32px] shadow-2xl border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex justify-between items-center mb-10">
+            <h2 className="text-2xl font-bold text-[#1B2B48]">طلب خدمة جديد</h2>
+            <button className="text-gray-300 hover:text-gray-500 transition-colors" onClick={() => setView('REQUESTS')}><X size={24} /></button>
           </div>
           
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">المشروع</label>
-              <select className="w-full p-4 bg-gray-50 rounded-2xl border-none" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
-                <option value="">اختر المشروع...</option>
-                {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-400 block pr-1">نوع الطلب</label>
+              <select 
+                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 text-[#1B2B48] font-bold outline-none focus:ring-2 ring-orange-500/20 disabled:opacity-50"
+                value={newRequest.type}
+                disabled={(currentUser?.role === 'CONVEYANCE' || currentUser?.role === 'TECHNICAL') && pendingGroupRequests.length === 0}
+                onChange={e => setNewRequest({...newRequest, type: e.target.value as any, authority: '', serviceSubType: ''})}
+              >
+                <option value="conveyance">إفراغ عقاري</option>
+                <option value="technical">دعم فني</option>
               </select>
             </div>
-            {isConv ? (
-              <>
-                <input type="text" placeholder="اسم العميل" className="w-full p-4 bg-gray-50 rounded-2xl" value={newRequest.clientName || ''} onChange={e => setNewRequest({...newRequest, clientName: e.target.value})} />
-                <input type="text" placeholder="رقم الهوية" className="w-full p-4 bg-gray-50 rounded-2xl" value={newRequest.idNumber || ''} onChange={e => setNewRequest({...newRequest, idNumber: e.target.value})} />
-              </>
-            ) : (
-              <select className="w-full p-4 bg-gray-50 rounded-2xl" value={newRequest.serviceSubType || ''} onChange={e => setNewRequest({...newRequest, serviceSubType: e.target.value})}>
-                <option value="">نوع الخدمة...</option>
-                {TECHNICAL_SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+
+            {isConv && (
+              <div className="flex p-1 bg-gray-100 rounded-2xl">
+                <button 
+                  onClick={() => { setConveyanceMode('individual'); setPendingGroupRequests([]); }}
+                  className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${conveyanceMode === 'individual' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  طلب فردي
+                </button>
+                <button 
+                  onClick={() => setConveyanceMode('group')}
+                  className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${conveyanceMode === 'group' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  مجموعة (ملف Excel)
+                </button>
+              </div>
             )}
-            <textarea placeholder="تفاصيل إضافية..." className="w-full p-4 bg-gray-50 rounded-2xl h-32" value={newRequest.details || ''} onChange={e => setNewRequest({...newRequest, details: e.target.value})} />
-            <button onClick={handleCreateRequest} className="w-full bg-[#E95D22] text-white py-5 rounded-3xl font-bold text-lg shadow-xl shadow-orange-500/30">إرسال الطلب</button>
+
+            {isConv && conveyanceMode === 'group' ? (
+              <div className="space-y-6">
+                {pendingGroupRequests.length === 0 ? (
+                  <div className="py-10 text-center border-2 border-dashed border-orange-200 rounded-3xl bg-orange-50/30">
+                    <FileSpreadsheet className="w-16 h-16 text-orange-500 mx-auto mb-4 opacity-50" />
+                    <p className="font-bold text-orange-600 mb-2">استيراد من ملف Excel</p>
+                    <p className="text-xs text-orange-400 mb-6 px-6 leading-relaxed">يرجى التأكد من أن الملف يحتوي على أعمدة واضحة لبيانات العملاء (اسم العميل، رقم الجوال، رقم الهوية، رقم القطعة، إلخ)</p>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        accept=".xlsx, .xls" 
+                        onChange={handleExcelUpload}
+                        className="hidden" 
+                    />
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-orange-500 text-white px-8 py-3 rounded-2xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+                    >
+                        اختر الملف للبدء
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-[#1B2B48] flex items-center gap-2">
+                            <ListChecks className="text-orange-500" />
+                            بيانات العملاء المستوردة ({pendingGroupRequests.length})
+                        </h3>
+                        <button 
+                            onClick={() => setPendingGroupRequests([])}
+                            className="text-red-500 text-xs font-bold hover:underline"
+                        >
+                            إلغاء الكل
+                        </button>
+                    </div>
+                    <div className="max-h-64 overflow-auto border border-gray-100 rounded-2xl shadow-inner bg-gray-50 custom-scrollbar">
+                        <table className="w-full text-right text-xs">
+                            <thead className="bg-white sticky top-0 shadow-sm">
+                                <tr>
+                                    <th className="p-3 border-b">اسم العميل</th>
+                                    <th className="p-3 border-b">رقم الجوال</th>
+                                    <th className="p-3 border-b">رقم القطعة</th>
+                                    <th className="p-3 border-b">البنك</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pendingGroupRequests.map((req, idx) => (
+                                    <tr key={idx} className="border-b border-gray-100 hover:bg-white/50 transition-colors">
+                                        <td className="p-3 font-bold">{req.clientName}</td>
+                                        <td className="p-3 text-gray-500">{req.mobileNumber}</td>
+                                        <td className="p-3 text-gray-500">{req.unitNumber}</td>
+                                        <td className="p-3 text-gray-500">{req.bank}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="bg-orange-50 p-4 rounded-2xl flex items-start gap-3 border border-orange-100">
+                        <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+                        <p className="text-[10px] text-orange-700 leading-relaxed">
+                            ملاحظة: سيتم إرسال كافة الطلبات أعلاه مباشرة إلى قائمة الانتظار للمراجعة. يرجى التأكد من دقة البيانات قبل المتابعة.
+                        </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {isConv ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">اسم العميل</label>
+                      <input type="text" placeholder="اسم العميل" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.clientName || ''} onChange={e => setNewRequest({...newRequest, clientName: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">رقم الجوال</label>
+                      <input type="text" placeholder="05xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.mobileNumber || ''} onChange={e => setNewRequest({...newRequest, mobileNumber: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">رقم الهوية</label>
+                      <input type="text" placeholder="10xxxxxxxx" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.idNumber || ''} onChange={e => setNewRequest({...newRequest, idNumber: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">المشروع</label>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
+                        <option value="">اختر المشروع...</option>
+                        {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">رقم القطعة</label>
+                      <input type="text" placeholder="رقم القطعة" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.unitNumber || ''} onChange={e => setNewRequest({...newRequest, unitNumber: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">رقم الصك</label>
+                      <input type="text" placeholder="اختياري" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.deedNumber || ''} onChange={e => setNewRequest({...newRequest, deedNumber: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">البنك</label>
+                      <input type="text" placeholder="البنك الممول" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.bank || ''} onChange={e => setNewRequest({...newRequest, bank: e.target.value})} />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">قيمة العقار</label>
+                      <input type="text" placeholder="القيمة الإجمالية" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" value={newRequest.propertyValue || ''} onChange={e => setNewRequest({...newRequest, propertyValue: e.target.value})} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">نوع الخدمة</label>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.serviceSubType || ''} onChange={e => setNewRequest({...newRequest, serviceSubType: e.target.value})}>
+                        <option value="">اختر نوع الخدمة...</option>
+                        {TECHNICAL_SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">وصف الخدمة</label>
+                      <textarea placeholder="أدخل تفاصيل الطلب هنا..." className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 h-28 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.details || ''} onChange={e => setNewRequest({...newRequest, details: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">المشروع</label>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.projectName} onChange={e => setNewRequest({...newRequest, projectName: e.target.value})}>
+                        <option value="">اختر المشروع...</option>
+                        {projects.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-400 pr-1">الجهة</label>
+                      <select className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none focus:ring-2 ring-orange-500/20" value={newRequest.authority || ''} onChange={e => setNewRequest({...newRequest, authority: e.target.value})}>
+                        <option value="">اختر الجهة المستهدفة...</option>
+                        {GOVERNMENT_AUTHORITIES.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {(conveyanceMode === 'individual' || !isConv || pendingGroupRequests.length > 0) && (
+              <button 
+                onClick={handleCreateRequest} 
+                className="w-full bg-[#E95D22] text-white py-5 rounded-3xl font-bold text-lg shadow-xl shadow-orange-500/30 flex items-center justify-center gap-3 active:scale-95 transition-all mt-4"
+              >
+                <Send className="w-5 h-5" />
+                {isConv && conveyanceMode === 'group' ? 'إرسال كافة الطلبات' : 'إرسال الطلب'}
+              </button>
+            )}
           </div>
         </div>
       </div>
     );
   };
 
-  const renderRequests = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">إدارة الطلبات الواردة</h2>
-      <div className="grid grid-cols-1 gap-4">
-        {serviceRequests.filter(r => {
-          if (currentUser?.role === 'FINANCE') return r.status === 'pending_finance';
-          if (currentUser?.role === 'PR_MANAGER' || currentUser?.role === 'ADMIN') return true;
-          return r.status === 'new' || r.status === 'pending_pr';
-        }).map(req => (
-          <div key={req.id} onClick={() => { setSelectedRequest(req); setIsRequestDetailOpen(true); }} className="bg-white p-6 rounded-3xl border border-gray-100 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className={`p-4 rounded-2xl ${req.type === 'conveyance' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                {req.type === 'conveyance' ? <Building className="w-6 h-6" /> : <Settings className="w-6 h-6" />}
+  const renderRequests = () => {
+    // Highly specific filtering based on user roles
+    const filteredRequests = serviceRequests.filter(r => {
+      // Admins and PR Managers/Officers see everything
+      if (['ADMIN', 'PR_MANAGER', 'PR_OFFICER'].includes(currentUser?.role || '')) return true;
+      
+      // Finance only sees requests pending their approval
+      if (currentUser?.role === 'FINANCE') return r.status === 'pending_finance';
+      
+      // Conveyance and Technical roles ONLY see requests they submitted
+      if (currentUser?.role === 'CONVEYANCE' || currentUser?.role === 'TECHNICAL') {
+        return r.submittedBy === currentUser.name;
+      }
+      
+      return false;
+    });
+
+    const isRestrictedRole = ['CONVEYANCE', 'TECHNICAL', 'FINANCE'].includes(currentUser?.role || '');
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">
+            {isRestrictedRole ? 'متابعة طلباتي' : 'إدارة الطلبات الواردة'}
+          </h2>
+          {isRestrictedRole && (
+            <button 
+              onClick={() => {
+                setNewRequest({ projectName: '', type: currentUser?.role === 'CONVEYANCE' ? 'conveyance' : 'technical' });
+                setView('SERVICE_ONLY');
+              }}
+              className="bg-[#E95D22] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-orange-500/20"
+            >
+              <Plus className="w-4 h-4" /> طلب جديد
+            </button>
+          )}
+        </div>
+
+        {filteredRequests.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4">
+            {filteredRequests.map(req => (
+              <div key={req.id} onClick={() => { setSelectedRequest(req); setIsRequestDetailOpen(true); }} className="bg-white p-6 rounded-3xl border border-gray-100 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div className="flex items-center gap-4">
+                  <div className={`p-4 rounded-2xl transition-colors ${req.type === 'conveyance' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+                    {req.type === 'conveyance' ? <Building className="w-6 h-6" /> : <Settings className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h4 className="font-bold">{req.name}</h4>
+                    <div className="flex items-center gap-3 text-sm text-gray-400">
+                      <span className="flex items-center gap-1"><MapPin size={12} /> {req.projectName}</span>
+                      <span className="flex items-center gap-1"><UserIcon size={12} /> {req.submittedBy}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  {(req.comments?.length || 0) > 0 && (
+                    <div className="flex items-center gap-1 text-gray-400 text-xs">
+                      <MessageSquare size={14} />
+                      <span>{req.comments?.length}</span>
+                    </div>
+                  )}
+                  <div className={`px-4 py-1.5 rounded-full text-xs font-bold ${
+                    req.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                    req.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                    req.status === 'revision' ? 'bg-orange-100 text-orange-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {req.status === 'new' ? 'جديد' : 
+                     req.status === 'pending_finance' ? 'انتظار المالية' : 
+                     req.status === 'completed' ? 'منجز' : 
+                     req.status === 'rejected' ? 'مرفوض' : 
+                     req.status === 'revision' ? 'إعادة للتعديل' : 'قيد المراجعة'}
+                  </div>
+                </div>
+                <div className="absolute inset-y-0 right-0 w-1 bg-orange-500 transform translate-x-full group-hover:translate-x-0 transition-transform"></div>
               </div>
-              <div>
-                <h4 className="font-bold">{req.name}</h4>
-                <p className="text-sm text-gray-400">{req.projectName} - {req.submittedBy}</p>
-              </div>
-            </div>
-            <div className={`px-4 py-1.5 rounded-full text-xs font-bold ${req.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-              {req.status === 'new' ? 'جديد' : req.status === 'pending_finance' ? 'مالية' : req.status === 'completed' ? 'منجز' : 'مرفوض'}
-            </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div className="bg-white p-16 rounded-[40px] border border-dashed border-gray-200 text-center space-y-4">
+            <ListChecks className="w-16 h-16 text-gray-200 mx-auto" />
+            <p className="text-gray-400 font-bold">لا توجد طلبات لعرضها حالياً</p>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   if (view === 'LOGIN') return (
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4 font-cairo" dir="rtl">
-      <div className="bg-white w-full max-w-md rounded-[50px] shadow-2xl overflow-hidden border border-gray-100">
-        <div className="bg-[#1B2B48] p-12 text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-          <img src={LOGO_URL} className="h-20 mx-auto bg-white p-4 rounded-3xl mb-6 shadow-xl" />
-          <h1 className="text-white text-2xl font-bold">بوابة الموظفين</h1>
-          <p className="text-blue-200/50 mt-2">دار وإعمار للتطوير العقاري</p>
+      <div className="bg-[#1B2B48] w-full max-w-md rounded-[50px] shadow-2xl overflow-hidden border border-gray-100 transition-all duration-500 hover:shadow-orange-500/10 text-center">
+        <div className="p-12 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full -mr-16 -mt-16 blur-3xl opacity-50"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full -ml-16 -mb-16 blur-3xl opacity-50"></div>
+          
+          <Logo className="h-48 mx-auto mb-8 relative z-10" />
+          
+          <div className="relative z-10 space-y-4">
+            <h1 className="text-white text-4xl font-bold tracking-tight">تسجيل الدخول</h1>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-orange-400 font-bold bg-white/5 border border-white/10 px-6 py-2 rounded-full text-lg">العلاقات العامة</span>
+              <p className="text-blue-200/60 text-sm font-medium">دار وإعمار للتطوير العقاري</p>
+            </div>
+          </div>
         </div>
-        <form onSubmit={handleLogin} className="p-10 space-y-6">
-          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20" value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} required />
-          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-gray-50 rounded-2xl outline-none" value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} required />
-          <button className="w-full bg-[#E95D22] text-white py-5 rounded-3xl font-bold shadow-lg shadow-orange-500/30 hover:scale-[1.02] transition-transform">دخول النظام</button>
+        
+        <form onSubmit={handleLogin} className="p-10 bg-white space-y-6 rounded-t-[50px] text-right">
+          <div className="space-y-4">
+            <div className="relative">
+              <UserIcon className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input 
+                type="email" 
+                placeholder="البريد الإلكتروني" 
+                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right" 
+                value={loginData.email} 
+                onChange={e => setLoginData({...loginData, email: e.target.value})} 
+                required 
+              />
+            </div>
+            <div className="relative">
+              <Settings className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input 
+                type="password" 
+                placeholder="كلمة المرور" 
+                className="w-full pr-12 pl-4 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 transition-all border border-gray-100 focus:border-orange-200 text-right" 
+                value={loginData.password} 
+                onChange={e => setLoginData({...loginData, password: e.target.value})} 
+                required 
+              />
+            </div>
+          </div>
+          
+          <button className="w-full bg-[#E95D22] text-white py-5 rounded-3xl font-bold shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-xl">
+            دخول النظام
+          </button>
+          
+          <p className="text-center text-gray-400 text-xs mt-4">
+            جميع الحقوق محفوظة © {new Date().getFullYear()} دار وإعمار للتطوير العقاري
+          </p>
         </form>
       </div>
     </div>
   );
 
+  const sidebarMenuItems = [
+    { id: 'DASHBOARD', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER'] },
+    { id: 'REQUESTS', label: 'قائمة الطلبات', icon: FileText, roles: ['ADMIN', 'PR_MANAGER', 'PR_OFFICER', 'FINANCE', 'TECHNICAL', 'CONVEYANCE'] },
+    { id: 'SERVICE_ONLY', label: 'طلب خدمة', icon: Plus, roles: ['TECHNICAL', 'CONVEYANCE', 'ADMIN', 'PR_MANAGER', 'PR_OFFICER'] },
+    { id: 'USERS', label: 'المستخدمين', icon: Users, roles: ['ADMIN'] },
+  ].filter(item => item.roles.includes(currentUser?.role || ''));
+
   return (
-    <div className="flex h-screen bg-[#f8f9fa] font-cairo" dir="rtl">
+    <div className="flex h-screen bg-[#f8f9fa] font-cairo overflow-hidden" dir="rtl">
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 right-0 z-50 w-72 bg-[#1B2B48] text-white flex flex-col transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}>
-        <div className="p-8 border-b border-white/5 flex flex-col items-center">
-          <div className="bg-white p-3 rounded-2xl mb-4">
-            <img src={LOGO_URL} className="h-10" />
+      <aside 
+        className={`fixed inset-y-0 right-0 z-50 bg-[#1B2B48] text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl 
+          ${isSidebarCollapsed ? 'w-20' : 'w-72'} 
+          ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}
+      >
+        <div className="p-6 border-b border-white/5 flex flex-col items-center relative overflow-hidden min-h-[160px] justify-center text-center">
+          <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'scale-75' : 'scale-100'} mb-2`}>
+             <Logo className={`${isSidebarCollapsed ? 'h-12 w-12' : 'h-24 w-24'}`} collapsed={isSidebarCollapsed} />
           </div>
-          <h2 className="font-bold">دار وإعمار</h2>
-          <span className="text-[10px] text-orange-400 font-bold tracking-widest uppercase mt-1">{currentUser?.role}</span>
-        </div>
-        <nav className="flex-1 p-6 space-y-2">
-          {currentUser?.role !== 'TECHNICAL' && currentUser?.role !== 'CONVEYANCE' && currentUser?.role !== 'FINANCE' && (
-            <button onClick={() => setView('DASHBOARD')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'DASHBOARD' ? 'bg-[#E95D22] shadow-xl shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}`}>
-              <LayoutDashboard size={20} /> لوحة التحكم
-            </button>
-          )}
-          {['ADMIN', 'PR_MANAGER', 'PR_OFFICER', 'FINANCE'].includes(currentUser?.role || '') && (
-            <button onClick={() => setView('REQUESTS')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'REQUESTS' ? 'bg-[#E95D22] shadow-xl shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}`}>
-              <FileText size={20} /> الطلبات الواردة
-            </button>
-          )}
-          {['TECHNICAL', 'CONVEYANCE'].includes(currentUser?.role || '') && (
-            <button onClick={() => setView('SERVICE_ONLY')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'SERVICE_ONLY' ? 'bg-[#E95D22] shadow-xl shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}`}>
-              <Plus size={20} /> طلب خدمة
-            </button>
-          )}
-          {currentUser?.role === 'ADMIN' && (
-            <button onClick={() => setView('USERS')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'USERS' ? 'bg-[#E95D22] shadow-xl shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}`}>
-              <Users size={20} /> المستخدمين
-            </button>
-          )}
-        </nav>
-        <div className="p-6 border-t border-white/5">
-          <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl mb-4">
-            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center font-bold">{currentUser?.name[0]}</div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate">{currentUser?.name}</p>
-              <p className="text-[10px] text-gray-500 truncate">{currentUser?.email}</p>
+          {!isSidebarCollapsed && (
+            <div className="text-center animate-in fade-in slide-in-from-top-2 duration-300">
+              <h2 className="font-bold text-sm">دار وإعمار</h2>
+              <span className="text-[10px] text-orange-400 font-bold tracking-widest uppercase mt-1 px-3 py-1 bg-white/5 rounded-full block mx-auto w-fit border border-white/5">
+                {currentUser?.role === 'ADMIN' ? 'المدير العام' : 
+                 currentUser?.role === 'PR_MANAGER' ? 'مدير العلاقات' : 
+                 currentUser?.role === 'PR_OFFICER' ? 'مسؤول علاقات' : 
+                 currentUser?.role === 'FINANCE' ? 'المالية' : 
+                 currentUser?.role === 'TECHNICAL' ? 'القسم الفني' : 'إفراغات'}
+              </span>
             </div>
+          )}
+          
+          {/* Toggle Button */}
+          <button 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="hidden lg:flex absolute top-4 left-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+          >
+            {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          {sidebarMenuItems.map(item => (
+            <button 
+              key={item.id} 
+              onClick={() => { setView(item.id as ViewState); setIsSidebarOpen(false); }} 
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all relative group
+                ${view === item.id ? 'bg-[#E95D22] shadow-xl shadow-orange-500/20' : 'hover:bg-white/5 text-gray-400'}
+                ${isSidebarCollapsed ? 'justify-center' : ''}`}
+              title={isSidebarCollapsed ? item.label : ''}
+            >
+              <item.icon size={20} className="shrink-0" /> 
+              {!isSidebarCollapsed && <span className="truncate whitespace-nowrap">{item.label}</span>}
+              {isSidebarCollapsed && (
+                <div className="absolute right-full mr-2 px-3 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                  {item.label}
+                </div>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-white/5 bg-[#16253d]">
+          <div className={`flex items-center gap-3 p-3 bg-white/5 rounded-2xl mb-4 overflow-hidden border border-white/5 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-bold shrink-0 shadow-lg shadow-orange-500/10">{currentUser?.name[0]}</div>
+            {!isSidebarCollapsed && (
+              <div className="overflow-hidden text-right">
+                <p className="text-sm font-bold truncate text-white">{currentUser?.name}</p>
+                <p className="text-[10px] text-gray-400 truncate">{currentUser?.email}</p>
+              </div>
+            )}
           </div>
-          <button onClick={() => setView('LOGIN')} className="w-full flex items-center gap-4 p-4 text-red-400 hover:bg-red-500/10 rounded-2xl">
-            <LogOut size={20} /> تسجيل خروج
+          <button 
+            onClick={() => setView('LOGIN')} 
+            className={`w-full flex items-center gap-4 p-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all group relative
+              ${isSidebarCollapsed ? 'justify-center' : ''}`}
+            title={isSidebarCollapsed ? 'تسجيل خروج' : ''}
+          >
+            <LogOut size={20} className="shrink-0" /> 
+            {!isSidebarCollapsed && <span className="font-bold">تسجيل خروج</span>}
+            {isSidebarCollapsed && (
+               <div className="absolute right-full mr-2 px-3 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                تسجيل خروج
+              </div>
+            )}
           </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#f8f9fa]">
-        <header className="lg:hidden p-4 bg-white border-b flex justify-between items-center">
-          <img src={LOGO_URL} className="h-8" />
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-50 rounded-xl"><Menu /></button>
+      <main className="flex-1 flex flex-col min-w-0 bg-[#f8f9fa] transition-all duration-300">
+        <header className="lg:hidden p-4 bg-[#1B2B48] flex justify-between items-center sticky top-0 z-40 shadow-sm">
+          <Logo className="h-10 w-10" />
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-colors"><Menu /></button>
         </header>
-        <div className="flex-1 overflow-y-auto p-6 lg:p-12">
+        
+        <div className="flex-1 overflow-y-auto p-6 lg:p-12 custom-scrollbar text-right">
           {view === 'DASHBOARD' && renderDashboard()}
           {view === 'USERS' && renderUsers()}
           {view === 'SERVICE_ONLY' && renderServiceOnly()}
           {view === 'REQUESTS' && renderRequests()}
           {view === 'PROJECT_DETAIL' && selectedProject && (
             <div className="space-y-6">
-              <button onClick={() => setView('DASHBOARD')} className="flex items-center gap-2 text-gray-500 hover:text-[#E95D22] mb-4"><ArrowLeft size={16} /> العودة للرئيسية</button>
-              <div className="bg-white rounded-[40px] p-10 shadow-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-10">
+              <button onClick={() => setView('DASHBOARD')} className="flex items-center gap-2 text-gray-500 hover:text-[#E95D22] mb-4 group transition-colors">
+                <div className="bg-gray-100 p-2 rounded-full group-hover:bg-orange-50 group-hover:text-orange-500 transition-colors">
+                  <ArrowLeft size={16} /> 
+                </div>
+                العودة للرئيسية
+              </button>
+              <div className="bg-white rounded-[40px] p-10 shadow-sm border border-gray-100 text-right">
+                <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6">
                   <div>
-                    <h2 className="text-4xl font-bold mb-2">{selectedProject.name}</h2>
-                    <p className="text-orange-500 font-bold">{selectedProject.location}</p>
+                    <h2 className="text-4xl font-bold mb-2 text-[#1B2B48]">{selectedProject.name}</h2>
+                    <div className="flex items-center gap-1.5 text-orange-500 font-bold bg-orange-50 px-3 py-1 rounded-full w-fit">
+                      <MapPin className="w-4 h-4" />
+                      {selectedProject.location}
+                    </div>
                   </div>
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 w-full md:w-auto">
                     {['ADMIN', 'PR_MANAGER'].includes(currentUser?.role || '') && (
-                      <button onClick={() => handleDeleteProject(selectedProject.name)} className="bg-red-50 text-red-500 p-4 rounded-2xl hover:bg-red-100"><Trash2 size={24} /></button>
+                      <button onClick={() => handleDeleteProject(selectedProject.name)} className="bg-red-50 text-red-500 p-4 rounded-3xl hover:bg-red-100 transition-colors shrink-0"><Trash2 size={24} /></button>
                     )}
-                    <div className="bg-gray-50 p-6 rounded-3xl text-center">
-                      <p className="text-gray-400 text-xs mb-1">نسبة الإنجاز</p>
-                      <p className="text-3xl font-bold text-[#1B2B48]">{Math.round(selectedProject.progress)}%</p>
+                    <div className="bg-gray-50 p-6 rounded-3xl text-center shadow-inner flex-1 md:flex-none min-w-[120px] border border-gray-100">
+                      <p className="text-gray-400 text-xs mb-1 text-center">نسبة الإنجاز</p>
+                      <p className="text-3xl font-bold text-[#1B2B48] text-center">{Math.round(selectedProject.progress)}%</p>
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                   <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-[#1B2B48] text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden">
-                       <ShieldCheck className="absolute -bottom-8 -left-8 w-32 h-32 opacity-10" />
-                       <h4 className="font-bold text-xl mb-6">إحصائيات المهام</h4>
+                    <div className="bg-[#1B2B48] text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden group">
+                       <ShieldCheck className="absolute -bottom-8 -left-8 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity" />
+                       <h4 className="font-bold text-xl mb-6 flex items-center gap-2">
+                         <FileCheck className="text-orange-400" />
+                         إحصائيات المهام
+                       </h4>
                        <div className="space-y-4">
                          <div className="flex justify-between border-b border-white/10 pb-2"><span>العدد الكلي</span><span className="font-bold">{selectedProject.totalTasks}</span></div>
                          <div className="flex justify-between border-b border-white/10 pb-2"><span>المنجزة</span><span className="font-bold text-green-400">{selectedProject.completedTasks}</span></div>
@@ -534,21 +1090,29 @@ const AppContent: React.FC = () => {
                        </div>
                     </div>
                     {['ADMIN', 'PR_MANAGER', 'PR_OFFICER'].includes(currentUser?.role || '') && (
-                      <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="w-full bg-[#E95D22] text-white py-5 rounded-[30px] font-bold text-lg shadow-xl shadow-orange-500/20">إضافة عمل جديد</button>
+                      <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="w-full bg-[#E95D22] text-white py-5 rounded-[30px] font-bold text-lg shadow-xl shadow-orange-500/20 hover:scale-[1.02] transition-transform active:scale-95">إضافة عمل جديد</button>
                     )}
                   </div>
                   <div className="lg:col-span-2 space-y-4">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-2xl font-bold">بيان الأعمال</h3>
-                      <div className="flex bg-gray-100 p-1 rounded-2xl">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                      <h3 className="text-2xl font-bold text-[#1B2B48]">بيان الأعمال</h3>
+                      <div className="flex bg-gray-100 p-1 rounded-2xl w-full sm:w-auto">
                         {['All', 'متابعة', 'منجز'].map(s => (
-                          <button key={s} onClick={() => setTaskFilter(s)} className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${taskFilter === s ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-400'}`}>{s === 'All' ? 'الكل' : s}</button>
+                          <button key={s} onClick={() => setTaskFilter(s)} className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-bold transition-all ${taskFilter === s ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-400'}`}>{s === 'All' ? 'الكل' : s}</button>
                         ))}
                       </div>
                     </div>
-                    {selectedProject.tasks.filter(t => taskFilter === 'All' || t.status === taskFilter).map(task => (
-                      <TaskCard key={task.id} task={task} onEdit={t => { setEditingTask(t); setNewTaskData(t); setIsTaskModalOpen(true); }} />
-                    ))}
+                    <div className="space-y-4">
+                      {selectedProject.tasks.filter(t => taskFilter === 'All' || t.status === taskFilter).length > 0 ? (
+                        selectedProject.tasks.filter(t => taskFilter === 'All' || t.status === taskFilter).map(task => (
+                          <TaskCard key={task.id} task={task} onEdit={t => { setEditingTask(t); setNewTaskData(t); setIsTaskModalOpen(true); }} />
+                        ))
+                      ) : (
+                        <div className="bg-white p-12 rounded-3xl border border-dashed border-gray-200 text-center">
+                          <p className="text-gray-400">لا توجد أعمال لعرضها</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -559,72 +1123,149 @@ const AppContent: React.FC = () => {
 
       {/* Modals */}
       <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="إضافة مشروع جديد">
-        <div className="space-y-4">
-          <input type="text" placeholder="اسم المشروع" className="w-full p-4 bg-gray-50 rounded-2xl" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl" value={newProject.location} onChange={e => setNewProject({...newProject, location: e.target.value})}>
+        <div className="space-y-4 text-right">
+          <input type="text" placeholder="اسم المشروع" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.location} onChange={e => setNewProject({...newProject, location: e.target.value})}>
             {LOCATIONS_ORDER.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
-          <input type="text" placeholder="رابط صورة المشروع (اختياري)" className="w-full p-4 bg-gray-50 rounded-2xl" value={newProject.imageUrl || ''} onChange={e => setNewProject({...newProject, imageUrl: e.target.value})} />
-          <button onClick={handleCreateProject} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold">حفظ المشروع</button>
+          <input type="text" placeholder="رابط صورة المشروع (اختياري)" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newProject.imageUrl || ''} onChange={e => setNewProject({...newProject, imageUrl: e.target.value})} />
+          <button onClick={handleCreateProject} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#1B2B48]/20 hover:bg-opacity-90 transition-colors">حفظ المشروع</button>
         </div>
       </Modal>
 
       <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="إضافة موظف جديد">
-        <div className="space-y-4">
-          <input type="text" placeholder="اسم الموظف" className="w-full p-4 bg-gray-50 rounded-2xl" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-gray-50 rounded-2xl" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
+        <div className="space-y-4 text-right">
+          <input type="text" placeholder="اسم الموظف" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
             <option value="PR_MANAGER">مدير علاقات عامة</option>
             <option value="PR_OFFICER">مسؤول علاقات عامة</option>
             <option value="FINANCE">المالية</option>
             <option value="TECHNICAL">القسم الفني</option>
             <option value="CONVEYANCE">موظف إفراغ</option>
           </select>
-          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-gray-50 rounded-2xl" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-          <button onClick={handleCreateUser} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold">إضافة الموظف</button>
+          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-right" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+          <button onClick={handleCreateUser} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-colors">إضافة الموظف</button>
         </div>
       </Modal>
 
       <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'تعديل عمل' : 'إضافة عمل جديد'}>
-        <div className="space-y-4">
-          <textarea placeholder="بيان العمل" className="w-full p-4 bg-gray-50 rounded-2xl" value={newTaskData.description || ''} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} />
-          <input type="text" placeholder="جهة المراجعة" className="w-full p-4 bg-gray-50 rounded-2xl" value={newTaskData.reviewer || ''} onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})} />
-          <select className="w-full p-4 bg-gray-50 rounded-2xl" value={newTaskData.status || 'متابعة'} onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}>
+        <div className="space-y-4 text-right">
+          <textarea placeholder="بيان العمل" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.description || ''} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} />
+          <input type="text" placeholder="جهة المراجعة" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.reviewer || ''} onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})} />
+          <select className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.status || 'متابعة'} onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}>
             <option value="متابعة">متابعة</option>
             <option value="منجز">منجز</option>
           </select>
-          <textarea placeholder="ملاحظات" className="w-full p-4 bg-gray-50 rounded-2xl" value={newTaskData.notes || ''} onChange={e => setNewTaskData({...newTaskData, notes: e.target.value})} />
-          <button onClick={handleSaveTask} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold">حفظ العمل</button>
+          <textarea placeholder="ملاحظات" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 ring-orange-500/20 text-right" value={newTaskData.notes || ''} onChange={e => setNewTaskData({...newTaskData, notes: e.target.value})} />
+          
+          <button onClick={handleSaveTask} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg shadow-[#1B2B48]/20 hover:bg-opacity-90 transition-colors">حفظ البيانات الأساسية</button>
+
+          {editingTask && (
+            <>
+              <CommentsList comments={editingTask.comments} />
+              <CommentInput onAdd={handleAddCommentToTask} />
+            </>
+          )}
         </div>
       </Modal>
 
       <Modal isOpen={isRequestDetailOpen} onClose={() => setIsRequestDetailOpen(false)} title="تفاصيل الطلب">
         {selectedRequest && (
           <div className="space-y-6 font-cairo text-right">
-            <div className="bg-gray-50 p-6 rounded-3xl">
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-gray-400 block mb-1">المشروع</span><span className="font-bold">{selectedRequest.projectName}</span></div>
                 <div><span className="text-gray-400 block mb-1">تاريخ الطلب</span><span className="font-bold">{selectedRequest.date}</span></div>
-                {selectedRequest.type === 'conveyance' && (
-                  <div className="col-span-2 border-t pt-4 mt-2">
-                    <p className="font-bold mb-2">بيانات الإفراغ:</p>
-                    <p className="text-sm">العميل: {selectedRequest.clientName}</p>
-                    <p className="text-sm">الهوية: {selectedRequest.idNumber}</p>
+                {selectedRequest.type === 'conveyance' ? (
+                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200">
+                    <p className="font-bold mb-2 text-[#1B2B48]">بيانات الإفراغ:</p>
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                      <p className="flex justify-between mb-2"><span>اسم العميل:</span> <span className="font-bold">{selectedRequest.clientName}</span></p>
+                      <p className="flex justify-between mb-2"><span>رقم الجوال:</span> <span className="font-bold">{selectedRequest.mobileNumber || '-'}</span></p>
+                      <p className="flex justify-between mb-2"><span>رقم الهوية:</span> <span className="font-bold">{selectedRequest.idNumber}</span></p>
+                      <p className="flex justify-between mb-2"><span>رقم القطعة:</span> <span className="font-bold">{selectedRequest.unitNumber || '-'}</span></p>
+                      <p className="flex justify-between mb-2"><span>رقم الصك:</span> <span className="font-bold">{selectedRequest.deedNumber || '-'}</span></p>
+                      <p className="flex justify-between mb-2"><span>البنك:</span> <span className="font-bold">{selectedRequest.bank || '-'}</span></p>
+                      <p className="flex justify-between"><span>قيمة العقار:</span> <span className="font-bold">{selectedRequest.propertyValue || '-'}</span></p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="col-span-2 border-t pt-4 mt-2 border-gray-200">
+                    <p className="font-bold mb-2 text-[#1B2B48]">بيانات الخدمة الفنية:</p>
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                      <p className="flex justify-between mb-2"><span>نوع الخدمة:</span> <span className="font-bold">{selectedRequest.serviceSubType}</span></p>
+                      <p className="flex justify-between mb-2"><span>الجهة المستهدفة:</span> <span className="font-bold">{selectedRequest.authority || '-'}</span></p>
+                    </div>
+                  </div>
+                )}
+                {selectedRequest.details && (
+                  <div className="col-span-2 mt-2">
+                    <span className="text-gray-400 block mb-1">الوصف والتفاصيل:</span>
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 text-sm leading-relaxed text-gray-700 shadow-sm">
+                      {selectedRequest.details}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
             
-            <div className="flex gap-3">
-              {currentUser?.role === 'FINANCE' && selectedRequest.status === 'pending_finance' && (
-                <>
-                  <button onClick={() => updateRequestStatus(selectedRequest.id, 'new')} className="flex-1 bg-green-500 text-white py-3 rounded-2xl font-bold">موافقة مالية</button>
-                  <button onClick={() => updateRequestStatus(selectedRequest.id, 'rejected')} className="flex-1 bg-red-500 text-white py-3 rounded-2xl font-bold">رفض</button>
-                </>
-              )}
-              {(['ADMIN', 'PR_MANAGER', 'PR_OFFICER'].includes(currentUser?.role || '')) && selectedRequest.status !== 'completed' && (
-                <button onClick={() => updateRequestStatus(selectedRequest.id, 'completed')} className="w-full bg-green-600 text-white py-3 rounded-2xl font-bold">اعتماد كمنجز</button>
-              )}
+            <div className="flex flex-col gap-3">
+              {/* Comment input box (should be used for notes before taking action) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-400 pr-1 text-right block">ملاحظة أو تعليق (اختياري عند اتخاذ إجراء)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="أدخل تعليقك هنا قبل اتخاذ الإجراء..." 
+                    className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 ring-orange-500/10 outline-none text-right"
+                    value={newCommentText}
+                    onChange={e => setNewCommentText(e.target.value)}
+                  />
+                  <button onClick={handleAddCommentToRequest} className="p-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-orange-500 hover:text-white transition-all"><MessageSquare size={20} /></button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* FINANCE ACTIONS */}
+                {currentUser?.role === 'FINANCE' && selectedRequest.status === 'pending_finance' && (
+                  <>
+                    <button onClick={() => updateRequestStatus(selectedRequest.id, 'new', newCommentText)} className="col-span-1 bg-green-500 text-white py-4 rounded-2xl font-bold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20 flex items-center justify-center gap-2 text-sm"><ThumbsUp size={18} /> موافقة</button>
+                    <button onClick={() => updateRequestStatus(selectedRequest.id, 'rejected', newCommentText)} className="col-span-1 bg-red-500 text-white py-4 rounded-2xl font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 text-sm"><ThumbsDown size={18} /> رفض</button>
+                  </>
+                )}
+
+                {/* PR MANAGER / ADMIN ACTIONS */}
+                {(['ADMIN', 'PR_MANAGER'].includes(currentUser?.role || '')) && (selectedRequest.status === 'new' || selectedRequest.status === 'pending_pr' || selectedRequest.status === 'revision') && (
+                  <>
+                    <button 
+                      onClick={() => updateRequestStatus(selectedRequest.id, 'completed', newCommentText)} 
+                      className="bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 text-sm"
+                    >
+                      <CheckCircle2 size={18} /> قبول واكتمال
+                    </button>
+                    <button 
+                      onClick={() => updateRequestStatus(selectedRequest.id, 'rejected', newCommentText)} 
+                      className="bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 text-sm"
+                    >
+                      <XCircle size={18} /> رفض الطلب
+                    </button>
+                    <button 
+                      onClick={() => updateRequestStatus(selectedRequest.id, 'revision', newCommentText)} 
+                      className="bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 text-sm"
+                    >
+                      <RotateCcw size={18} /> إعادة للتعديل
+                    </button>
+                  </>
+                )}
+
+                {/* PR OFFICER BASIC ACTION */}
+                {currentUser?.role === 'PR_OFFICER' && selectedRequest.status !== 'completed' && (
+                  <button onClick={() => updateRequestStatus(selectedRequest.id, 'completed', newCommentText)} className="col-span-2 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 text-sm">اعتماد كمنجز</button>
+                )}
+              </div>
+
+              <CommentsList comments={selectedRequest.comments} />
             </div>
           </div>
         )}

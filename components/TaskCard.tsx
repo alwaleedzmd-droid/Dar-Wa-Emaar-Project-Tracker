@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Edit3, Building2, User, Calendar, FileText } from 'lucide-react';
+import { Edit3, Building2, User, Calendar, FileText, MessageSquare } from 'lucide-react';
 import { Task } from '../types';
 
 interface TaskCardProps {
@@ -9,18 +10,27 @@ interface TaskCardProps {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit }) => {
   const isCompleted = task.status === 'منجز';
+  const commentCount = task.comments?.length || 0;
 
   return (
     <div className={`bg-white rounded-xl p-5 border-r-4 shadow-sm hover:shadow-md transition-shadow relative ${isCompleted ? 'border-green-500' : 'border-[#E95D22]'}`}>
       
       <div className="flex justify-between items-start mb-3">
         <h4 className="font-bold text-[#1B2B48] text-lg ml-8">{task.description}</h4>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-          className="p-2 text-gray-400 hover:text-[#E95D22] hover:bg-[#E95D22]/10 rounded-full transition-colors absolute top-4 left-4"
-        >
-          <Edit3 className="w-4 h-4" />
-        </button>
+        <div className="flex gap-2 absolute top-4 left-4">
+          {commentCount > 0 && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg text-gray-500 text-xs">
+              <MessageSquare className="w-3 h-3" />
+              <span>{commentCount}</span>
+            </div>
+          )}
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+            className="p-2 text-gray-400 hover:text-[#E95D22] hover:bg-[#E95D22]/10 rounded-full transition-colors"
+          >
+            <Edit3 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

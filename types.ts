@@ -1,4 +1,12 @@
 
+export interface Comment {
+  id: string;
+  text: string;
+  author: string;
+  authorRole: string;
+  timestamp: string;
+}
+
 export interface Task {
   id: string;
   project: string;
@@ -9,6 +17,7 @@ export interface Task {
   location: string;
   status: 'منجز' | 'متابعة' | string;
   date: string;
+  comments?: Comment[];
 }
 
 export interface ProjectSummary {
@@ -39,7 +48,8 @@ export type RequestStatus =
   | 'pending_finance'   
   | 'pending_pr'        
   | 'completed'         
-  | 'rejected';         
+  | 'rejected'
+  | 'revision';         
 
 export interface RequestHistory {
   action: string;
@@ -60,16 +70,20 @@ export interface ServiceRequest {
   date: string;
   history: RequestHistory[];
   projectName: string;
+  comments?: Comment[];
   // Conveyance fields
   clientName?: string;
+  mobileNumber?: string;
   idNumber?: string;
   deedNumber?: string;
   propertyValue?: string;
+  unitNumber?: string;
+  bank?: string;
   // Technical fields
   serviceSubType?: string;
+  authority?: string;
 }
 
-// Added missing ProjectMetrics interface used in constants.ts
 export interface ProjectMetrics {
   unitsCount: number;
   buildingPermitsCount: number;
@@ -79,7 +93,6 @@ export interface ProjectMetrics {
   electricityMetersCount: number;
 }
 
-// Added missing ProjectContacts interface used in constants.ts
 export interface ProjectContacts {
   prManager?: string;
   prOfficer?: string;

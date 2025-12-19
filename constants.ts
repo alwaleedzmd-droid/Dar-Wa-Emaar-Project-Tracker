@@ -1,5 +1,4 @@
 
-
 export const RAW_CSV_DATA = `المشروع,بيان الأعمال,جهة المراجعة,الجهة طالبة الخدمة,الوصف والملاحظات,الموقع,الحالة,تاريخ المتابعة
 سرايا البحر,خدمات AI,-,-,"تجربة ",القطيف,منجز,2025-12-09
 سرايا النرجس,معاملة افراغات وحدات سرايا النرجس,وزارة الإسكان,الرئيس التنفيذي,"تم تسليم الى الشركة الوطنية للاسكان عدد 1288 طلب افراغ ، وجاري العمل على المتبقي.",الرياض,متابعة,2025/11/28
@@ -65,7 +64,7 @@ export const TECHNICAL_SERVICE_TYPES = [
 
 export const GOVERNMENT_AUTHORITIES = [
     'وزارة الإسكان',
-    'شركة الوطنية للاسكان',
+    'الشركة الوطنية للاسكان',
     'أمانة منطقة الرياض',
     'الشركة السعودية للكهرباء',
     'المركز الوطني للرقابة على الالتزام البيئي',
@@ -149,4 +148,6 @@ export const INITIAL_PROJECT_CONTACTS: Record<string, ProjectContacts> = {
     // Empty initial structure, will be populated by users
 };
 
-export const LOGO_URL = "https://darwaemaar.com/wp-content/uploads/2021/11/logo.png";
+// Professional SVG Logo for Dar Wa Emaar
+export const DAR_LOGO = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgdmlld0JveD0iMCAwIDUwMCA1MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MDAiIGhlaWdodz0iNTAwIiByeD0iNTAiIGZpbGw9IiMxQjJCODAiLz4KPHBhdGggZD0iTTI1MCAxMDBMMTAwIDIyMFY0MDBIMjAwVjMwMEgzMDBWNDAwSDQwMFYyMjBMMjUwIDEwMFoiIGZpbGw9IiNFMzVEMjIiLz4KPHBhdGggZD0iTTI1MCAxNTBMMTUwIDIzMFYzNzBIMjMwVjI3MEgyNzBWMzcwSDM1MFYyMzBMMjUwIDE1MFoiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuMiIvPgo8cGF0aCBkPSJNMjUwIDgwTDE1MCAxNjBWMjQwaDIwMHYtODBMMjUwIDgwWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+";
+export const DAR_LOGO_STABLE = DAR_LOGO;
