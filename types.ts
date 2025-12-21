@@ -20,6 +20,22 @@ export interface Task {
   comments?: Comment[];
 }
 
+export interface ContractorInfo {
+  company: string;
+  engineer: string;
+  phone: string;
+}
+
+export interface ProjectDetails {
+  location?: string;
+  unitsCount?: number;
+  electricityMetersCount?: number;
+  waterMetersCount?: number;
+  electricityContractor?: ContractorInfo;
+  waterContractor?: ContractorInfo;
+  consultantOffice?: ContractorInfo;
+}
+
 export interface ProjectSummary {
   name: string;
   location: string;
@@ -29,6 +45,7 @@ export interface ProjectSummary {
   tasks: Task[];
   imageUrl?: string;
   isPinned?: boolean;
+  details?: ProjectDetails;
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'PROJECT_DETAIL' | 'USERS' | 'SERVICE_ONLY' | 'REQUESTS';
@@ -82,20 +99,4 @@ export interface ServiceRequest {
   // Technical fields
   serviceSubType?: string;
   authority?: string;
-}
-
-export interface ProjectMetrics {
-  unitsCount: number;
-  buildingPermitsCount: number;
-  surveyDecisionsCount: number;
-  occupancyCertificatesCount: number;
-  waterMetersCount: number;
-  electricityMetersCount: number;
-}
-
-export interface ProjectContacts {
-  prManager?: string;
-  prOfficer?: string;
-  technicalLead?: string;
-  [key: string]: string | undefined;
 }

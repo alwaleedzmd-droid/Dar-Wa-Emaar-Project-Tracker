@@ -18,7 +18,7 @@ export const TECHNICAL_SERVICE_TYPES = [
     'شبكة المياة',
     'نقل ملكية عدادات الكهرباء',
     'شهادات الاشغال',
-    'نزع الملكية',
+    'نزل الملكية',
     'طلب فتح خدمة الكهرباء',
     'طلب استثناء شهادات الاشغال',
     'إصدار رخص بناء',
@@ -51,7 +51,7 @@ export const GOVERNMENT_AUTHORITIES = [
     'أخرى'
 ];
 
-import { User, ProjectMetrics, ProjectContacts } from './types';
+import { User } from './types';
 
 export const INITIAL_USERS: User[] = [
   { id: '1', name: 'مدير النظام', email: 'admin@dar.sa', role: 'ADMIN', password: '123' },
