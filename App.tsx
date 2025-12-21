@@ -10,7 +10,7 @@ import {
   MessageSquare, MessageCirclePlus, MapPin, FileSpreadsheet,
   ListChecks, AlertTriangle, RotateCcw, ThumbsUp, ThumbsDown,
   Building2, SortAsc, SortDesc, Edit2, CreditCard, Landmark, Hash, Phone, FileUp,
-  ClipboardList, CheckCircle as CheckIcon, XCircle as CloseIcon, RefreshCw
+  ClipboardList, CheckCircle as CheckIcon, XCircle as CloseIcon, RefreshCw, FileDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
@@ -369,6 +369,42 @@ const AppContent: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const handleExportAllProjects = () => {
+    if (projects.length === 0) return alert('لا يوجد مشاريع للتصدير');
+
+    // Flatten tasks from all projects into a single array for Excel
+    const exportData: any[] = [];
+    let counter = 1;
+
+    projects.forEach(project => {
+      project.tasks.forEach(task => {
+        exportData.push({
+          'م': counter++,
+          'المشروع': project.name,
+          'بيان الأعمال': task.description,
+          'جهة المراجعة': task.reviewer,
+          'الجهة طالبة الخدمة': task.requester,
+          'الوصف': task.notes,
+          'الموقع': project.location,
+          'الملاحظات': task.status,
+          'تاريخ المتابعة': task.date
+        });
+      });
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Set Right-to-Left orientation for the worksheet
+    if (!worksheet['!views']) worksheet['!views'] = [];
+    worksheet['!views'].push({ RTL: true });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير المشاريع");
+    
+    // Download the file
+    XLSX.writeFile(workbook, `تقرير_المشاريع_دار_وإعمار_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const filteredDashboard = useMemo(() => projects.filter(p => (locationFilter === 'All' || p.location === locationFilter) && (p.name.toLowerCase().includes(searchQuery.toLowerCase()))), [projects, locationFilter, searchQuery]);
 
   // Request Filtering based on role
@@ -444,9 +480,15 @@ const AppContent: React.FC = () => {
                 <div className="space-y-6">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h2 className="text-2xl font-bold text-[#1B2B48]">الرئيسية</h2>
-                    <div className="flex gap-3 w-full md:w-auto">
+                    <div className="flex flex-wrap gap-3 w-full md:w-auto">
                       <div className="relative flex-1 md:flex-initial"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" /><input type="text" placeholder="بحث..." className="pr-10 pl-4 py-2 rounded-xl border w-full md:w-64 text-right font-cairo outline-none focus:ring-2 ring-orange-500/20" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
-                      <button onClick={() => setIsProjectModalOpen(true)} className="bg-[#E95D22] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg"><Plus size={20} /> جديد</button>
+                      <button 
+                        onClick={handleExportAllProjects}
+                        className="bg-green-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:bg-green-700 transition-all"
+                      >
+                        <FileDown size={20} /> تصدير Excel
+                      </button>
+                      <button onClick={() => setIsProjectModalOpen(true)} className="bg-[#E95D22] text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:bg-opacity-90 transition-all"><Plus size={20} /> جديد</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredDashboard.map(p => <ProjectCard key={p.name} project={p} onClick={p => { setSelectedProject(p); setView('PROJECT_DETAIL'); }} onTogglePin={() => {}} />)}</div>
@@ -653,7 +695,72 @@ const AppContent: React.FC = () => {
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="تأكيد الحذف"><div className="text-right space-y-6"><div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex items-center gap-4"><AlertCircle className="text-red-500" size={32} /><p className="text-red-700 font-bold">حذف مشروع "{projectToDelete}"؟</p></div><div className="flex gap-4"><button onClick={handleDeleteProject} className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold">نعم، احذف</button><button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold">إلغاء</button></div></div></Modal>
       <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="مشروع جديد"><div className="space-y-4 text-right"><label className="text-xs font-bold text-gray-400 pr-1">اسم المشروع</label><input type="text" placeholder="مثلاً: سرايا البدر" className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} /><button onClick={handleCreateProject} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold mt-4 shadow-lg">حفظ المشروع</button></div></Modal>
-      <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'تعديل العمل' : 'إضافة عمل'}><div className="space-y-4 text-right font-cairo"><div><label className="text-xs font-bold text-gray-400 pr-1">بيان العمل</label><textarea className="w-full p-4 bg-gray-50 rounded-2xl border outline-none text-right font-cairo h-24" value={newTaskData.description || ''} onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} /></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-gray-400 pr-1">جهة المراجعة</label><select className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" value={newTaskData.reviewer || ''} onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})}><option value="">اختر جهة...</option>{GOVERNMENT_AUTHORITIES.map(auth => <option key={auth} value={auth}>{auth}</option>)}</select></div><div><label className="text-xs font-bold text-gray-400 pr-1">الجهة طالبة الخدمة</label><input type="text" className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" value={newTaskData.requester || ''} onChange={e => setNewTaskData({...newTaskData, requester: e.target.value})} /></div></div><div><label className="text-xs font-bold text-gray-400 pr-1">الحالة</label><select className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" value={newTaskData.status || 'متابعة'} onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}><option value="متابعة">متابعة</option><option value="منجز">منجز</option></select></div><button onClick={handleSaveTask} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg mt-4">حفظ</button></div></Modal>
+      
+      {/* Task Modal - Updated with new fields based on image */}
+      <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'تعديل العمل' : 'إضافة عمل'}>
+        <div className="space-y-4 text-right font-cairo">
+          <div>
+            <label className="text-xs font-bold text-gray-400 pr-1">بيان الأعمال</label>
+            <textarea 
+              className="w-full p-4 bg-gray-50 rounded-2xl border outline-none text-right font-cairo h-20" 
+              value={newTaskData.description || ''} 
+              onChange={e => setNewTaskData({...newTaskData, description: e.target.value})} 
+              placeholder="وصف العمل الأساسي..."
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-gray-400 pr-1">جهة المراجعة</label>
+              <select 
+                className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" 
+                value={newTaskData.reviewer || ''} 
+                onChange={e => setNewTaskData({...newTaskData, reviewer: e.target.value})}
+              >
+                <option value="">اختر جهة...</option>
+                {GOVERNMENT_AUTHORITIES.map(auth => <option key={auth} value={auth}>{auth}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-400 pr-1">الجهة طالبة الخدمة</label>
+              <input 
+                type="text" 
+                className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" 
+                value={newTaskData.requester || ''} 
+                onChange={e => setNewTaskData({...newTaskData, requester: e.target.value})} 
+                placeholder="الرئيس التنفيذي، إلخ..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-400 pr-1">الوصف</label>
+            <textarea 
+              className="w-full p-4 bg-gray-50 rounded-2xl border outline-none text-right font-cairo h-24" 
+              value={newTaskData.notes || ''} 
+              onChange={e => setNewTaskData({...newTaskData, notes: e.target.value})} 
+              placeholder="ملاحظات تفصيلية حول الإجراء..."
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-400 pr-1">الحالة</label>
+            <select 
+              className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" 
+              value={newTaskData.status || 'متابعة'} 
+              onChange={e => setNewTaskData({...newTaskData, status: e.target.value})}
+            >
+              <option value="متابعة">متابعة</option>
+              <option value="منجز">منجز</option>
+            </select>
+          </div>
+
+          <button onClick={handleSaveTask} className="w-full bg-[#1B2B48] text-white py-4 rounded-2xl font-bold shadow-lg mt-4 hover:bg-opacity-90 transition-all">
+            حفظ العمل
+          </button>
+        </div>
+      </Modal>
+
       <Modal isOpen={isCommentsModalOpen} onClose={() => setIsCommentsModalOpen(false)} title={`تعليقات المهمة`}><div className="space-y-6 text-right font-cairo flex flex-col h-[60vh]"><div className="flex-1 overflow-y-auto space-y-4 p-2 custom-scrollbar">{selectedTaskForComments?.comments?.map(comment => (<div key={comment.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-2"><span className="font-bold text-[#1B2B48] text-sm">{comment.author}</span><span className="text-[10px] text-gray-400">{new Date(comment.timestamp).toLocaleString('ar-SA')}</span></div><p className="text-sm text-gray-600">{comment.text}</p></div>))}</div><div className="border-t pt-4 flex gap-2"><input type="text" placeholder="اكتب تعليقك هنا..." className="flex-1 p-4 bg-gray-50 rounded-2xl border outline-none font-cairo" value={newCommentText} onChange={e => setNewCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddComment()} /><button onClick={handleAddComment} className="p-4 bg-[#E95D22] text-white rounded-2xl shadow-lg"><Send size={20} /></button></div></div></Modal>
       <Modal isOpen={isRequestCommentsModalOpen} onClose={() => setIsRequestCommentsModalOpen(false)} title={`التعليقات على الطلب`}><div className="space-y-6 text-right font-cairo flex flex-col h-[60vh]"><div className="flex-1 overflow-y-auto space-y-4 p-2 custom-scrollbar">{selectedRequestForComments?.comments?.length === 0 ? (<p className="text-center text-gray-400 py-10">لا يوجد تعليقات بعد</p>) : (selectedRequestForComments?.comments?.map(comment => (<div key={comment.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-2"><span className="font-bold text-[#1B2B48] text-sm">{comment.author}</span><span className="text-[10px] text-gray-400">{new Date(comment.timestamp).toLocaleString('ar-SA')}</span></div><p className="text-sm text-gray-600">{comment.text}</p></div>)))}</div><div className="border-t pt-4 flex gap-2"><input type="text" placeholder="اكتب تعليقك هنا..." className="flex-1 p-4 bg-gray-50 rounded-2xl border outline-none font-cairo" value={newCommentText} onChange={e => setNewCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddRequestComment()} /><button onClick={handleAddRequestComment} className="p-4 bg-[#E95D22] text-white rounded-2xl shadow-lg"><Send size={20} /></button></div></div></Modal>
     </div>
