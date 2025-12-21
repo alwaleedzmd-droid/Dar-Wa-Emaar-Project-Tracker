@@ -6,9 +6,10 @@ import { Task } from '../types';
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
+  onOpenComments: (task: Task) => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onOpenComments }) => {
   const isCompleted = task.status === 'منجز';
   const commentCount = task.comments?.length || 0;
 
@@ -18,15 +19,22 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit }) => {
       <div className="flex justify-between items-start mb-3">
         <h4 className="font-bold text-[#1B2B48] text-lg ml-8">{task.description}</h4>
         <div className="flex gap-2 absolute top-4 left-4">
-          {commentCount > 0 && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg text-gray-500 text-xs">
-              <MessageSquare className="w-3 h-3" />
-              <span>{commentCount}</span>
-            </div>
-          )}
+          <button 
+            onClick={(e) => { e.stopPropagation(); onOpenComments(task); }}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all ${
+              commentCount > 0 
+              ? 'bg-[#E95D22]/10 text-[#E95D22] border border-[#E95D22]/20' 
+              : 'bg-gray-100 text-gray-400 hover:text-[#E95D22] hover:bg-[#E95D22]/5'
+            }`}
+            title="التعليقات"
+          >
+            <MessageSquare className="w-4 h-4" />
+            {commentCount > 0 && <span className="text-xs font-bold">{commentCount}</span>}
+          </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(task); }}
             className="p-2 text-gray-400 hover:text-[#E95D22] hover:bg-[#E95D22]/10 rounded-full transition-colors"
+            title="تعديل"
           >
             <Edit3 className="w-4 h-4" />
           </button>
@@ -46,10 +54,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit }) => {
         </div>
       </div>
       
-      <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 mb-4 leading-relaxed flex items-start gap-2 border border-gray-100">
-        <FileText className="w-4 h-4 text-[#E95D22] mt-1 shrink-0" />
-        <p>{task.notes || 'لا يوجد ملاحظات'}</p>
-      </div>
+      {task.notes && (
+        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 mb-4 leading-relaxed flex items-start gap-2 border border-gray-100">
+          <FileText className="w-4 h-4 text-[#E95D22] mt-1 shrink-0" />
+          <p>{task.notes}</p>
+        </div>
+      )}
 
       <div className="flex justify-between items-center border-t border-gray-100 pt-3 mt-auto">
         <div className={`px-3 py-1 rounded-full text-xs font-bold ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-[#E95D22]/10 text-[#E95D22]'}`}>
