@@ -1,15 +1,17 @@
 
 import React from 'react';
-import { Edit3, Building2, User, Calendar, FileText, MessageSquare } from 'lucide-react';
+import { Edit3, Building2, User, Calendar, FileText, MessageSquare, Trash2 } from 'lucide-react';
 import { Task } from '../types';
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onOpenComments: (task: Task) => void;
+  onDelete?: (task: Task) => void;
+  canManage?: boolean;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onOpenComments }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onOpenComments, onDelete, canManage }) => {
   const isCompleted = task.status === 'منجز';
   const commentCount = task.comments?.length || 0;
 
@@ -17,7 +19,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onOpenComments }) => 
     <div className={`bg-white rounded-xl p-5 border-r-4 shadow-sm hover:shadow-md transition-shadow relative ${isCompleted ? 'border-green-500' : 'border-[#E95D22]'}`}>
       
       <div className="flex justify-between items-start mb-3">
-        <h4 className="font-bold text-[#1B2B48] text-lg ml-8">{task.description}</h4>
+        <h4 className="font-bold text-[#1B2B48] text-lg ml-20">{task.description}</h4>
         <div className="flex gap-2 absolute top-4 left-4">
           <button 
             onClick={(e) => { e.stopPropagation(); onOpenComments(task); }}
@@ -31,13 +33,25 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onOpenComments }) => 
             <MessageSquare className="w-4 h-4" />
             {commentCount > 0 && <span className="text-xs font-bold">{commentCount}</span>}
           </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-            className="p-2 text-gray-400 hover:text-[#E95D22] hover:bg-[#E95D22]/10 rounded-full transition-colors"
-            title="تعديل"
-          >
-            <Edit3 className="w-4 h-4" />
-          </button>
+          
+          {canManage && (
+            <>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+                className="p-2 text-gray-400 hover:text-[#1B2B48] hover:bg-gray-100 rounded-full transition-colors"
+                title="تعديل"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDelete?.(task); }}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                title="حذف العمل"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 

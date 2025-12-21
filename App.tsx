@@ -159,7 +159,9 @@ const AppContent: React.FC = () => {
   const [isRequestCommentsModalOpen, setIsRequestCommentsModalOpen] = useState(false);
   const [isRequestDetailModalOpen, setIsRequestDetailModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleteTaskConfirmOpen, setIsDeleteTaskConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [newProject, setNewProject] = useState<Partial<ProjectSummary>>({ name: '', location: LOCATIONS_ORDER[0] });
@@ -204,6 +206,38 @@ const AppContent: React.FC = () => {
         if (selectedProject?.name === projectToDelete) setView('DASHBOARD');
         setIsDeleteConfirmOpen(false);
         setProjectToDelete(null);
+      }
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (taskToDelete) {
+      const { error } = await supabase.from('projects').delete().eq('id', taskToDelete.id);
+      if (error) alert(error.message);
+      else {
+        await fetchProjects();
+        // Update selected project view if necessary
+        if (selectedProject) {
+            const updated = (await supabase.from('projects').select('*').eq('client', selectedProject.name));
+            if (updated.data) {
+                const tasks: Task[] = updated.data.map((r: any) => ({
+                    id: r.id.toString(),
+                    project: r.client,
+                    description: r.title,
+                    reviewer: r.reviewer || '',
+                    requester: r.requester || '',
+                    notes: r.notes || '',
+                    location: 'الرياض',
+                    status: r.status,
+                    date: r.date,
+                    comments: r.comments || []
+                }));
+                const done = tasks.filter(t => t.status === 'منجز').length;
+                setSelectedProject({ ...selectedProject, tasks, totalTasks: tasks.length, completedTasks: done, progress: tasks.length > 0 ? (done / tasks.length) * 100 : 0 });
+            }
+        }
+        setIsDeleteTaskConfirmOpen(false);
+        setTaskToDelete(null);
       }
     }
   };
@@ -432,6 +466,10 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const canUserManageTasks = useMemo(() => {
+    return currentUser?.role === 'ADMIN' || currentUser?.role === 'PR_MANAGER' || currentUser?.role === 'PR_OFFICER';
+  }, [currentUser]);
+
   if (view === 'LOGIN') return (
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4 font-cairo" dir="rtl">
       <div className="bg-[#1B2B48] w-full max-w-md rounded-[50px] shadow-2xl overflow-hidden border border-gray-100 text-center">
@@ -508,7 +546,18 @@ const AppContent: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                             <div className="lg:col-span-1 space-y-6"><button onClick={() => { setEditingTask(null); setNewTaskData({ status: 'متابعة' }); setIsTaskModalOpen(true); }} className="w-full bg-[#E95D22] text-white py-5 rounded-[30px] font-bold text-lg shadow-xl hover:scale-[1.02] transition-all">إضافة عمل جديد</button></div>
-                            <div className="lg:col-span-2 space-y-4">{selectedProject.tasks.map(task => <TaskCard key={task.id} task={task} onEdit={t => { setEditingTask(t); setNewTaskData(t); setIsTaskModalOpen(true); }} onOpenComments={t => { setSelectedTaskForComments(t); setIsCommentsModalOpen(true); }} />)}</div>
+                            <div className="lg:col-span-2 space-y-4">
+                                {selectedProject.tasks.map(task => (
+                                    <TaskCard 
+                                        key={task.id} 
+                                        task={task} 
+                                        onEdit={t => { setEditingTask(t); setNewTaskData(t); setIsTaskModalOpen(true); }} 
+                                        onOpenComments={t => { setSelectedTaskForComments(t); setIsCommentsModalOpen(true); }} 
+                                        onDelete={t => { setTaskToDelete(t); setIsDeleteTaskConfirmOpen(true); }}
+                                        canManage={canUserManageTasks}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -694,6 +743,20 @@ const AppContent: React.FC = () => {
       </Modal>
 
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="تأكيد الحذف"><div className="text-right space-y-6"><div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex items-center gap-4"><AlertCircle className="text-red-500" size={32} /><p className="text-red-700 font-bold">حذف مشروع "{projectToDelete}"؟</p></div><div className="flex gap-4"><button onClick={handleDeleteProject} className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold">نعم، احذف</button><button onClick={() => setIsDeleteConfirmOpen(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold">إلغاء</button></div></div></Modal>
+      
+      <Modal isOpen={isDeleteTaskConfirmOpen} onClose={() => setIsDeleteTaskConfirmOpen(false)} title="تأكيد حذف العمل">
+        <div className="text-right space-y-6">
+            <div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex items-center gap-4">
+                <AlertCircle className="text-red-500" size={32} />
+                <p className="text-red-700 font-bold">هل أنت متأكد من حذف هذا العمل؟ لا يمكن التراجع عن هذه الخطوة.</p>
+            </div>
+            <div className="flex gap-4">
+                <button onClick={handleDeleteTask} className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold">تأكيد الحذف</button>
+                <button onClick={() => setIsDeleteTaskConfirmOpen(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold">إلغاء</button>
+            </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="مشروع جديد"><div className="space-y-4 text-right"><label className="text-xs font-bold text-gray-400 pr-1">اسم المشروع</label><input type="text" placeholder="مثلاً: سرايا البدر" className="w-full p-4 bg-gray-50 rounded-2xl border text-right font-cairo outline-none" value={newProject.name} onChange={e => setNewProject({...newProject, name: e.target.value})} /><button onClick={handleCreateProject} className="w-full bg-[#E95D22] text-white py-4 rounded-2xl font-bold mt-4 shadow-lg">حفظ المشروع</button></div></Modal>
       
       {/* Task Modal - Updated with new fields based on image */}
